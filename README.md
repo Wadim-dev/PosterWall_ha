@@ -195,6 +195,7 @@ No entity polls. The photo list is read once at start, every 6 hours and on the 
 ## Known limitations
 
 - Favourites exist only with Immich.
+- A wall reads up to 50,000 photos. For bigger libraries choose an album or folder: it is read on its own, with the same limit.
 - With Home Assistant media the date comes from the file name or a year folder; photos without either have no date and are not used for *on this day*.
 - Google Cast needs an `https://` address for Home Assistant.
 - If your dashboard resources are managed in YAML, add `/posterwall_static/posterwall-card.js` as module yourself.

@@ -212,3 +212,18 @@ async def test_synology_session_expired(hass: HomeAssistant, synology: MockConfi
     from custom_components.posterwall.sources import Photo
 
     assert await s.async_fetch(Photo("s1", extra={"id": 1, "cache_key": "c", "size": "xl", "team": False})) == (JPEG, "image/jpeg")
+
+
+def test_pick_skips_same_file_name() -> None:
+    """A copy of a photo in another folder counts as shown."""
+    from datetime import datetime
+    import random
+
+    from custom_components.posterwall.sources import Photo, pick
+
+    a = Photo("media-source://x/Backup/IMG_1.jpg")
+    b = Photo("media-source://x/2019/img_1.JPG")
+    c = Photo("media-source://x/2019/IMG_2.jpg")
+    for _ in range(20):
+        p, _years = pick([a, b, c], [a.id], today=datetime(2026, 11, 25), favorites=False, on_this_day=False, rnd=random.Random())
+        assert p is c

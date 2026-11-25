@@ -4,7 +4,7 @@
    Robust on weak devices and streamed screens: one photo is loaded at a time (one in stock), every step has a time limit,
    a watchdog restarts a stalled wall, photos are decoded at most 720 px wide. */
 (() => {
-  const VERSION = "1.0.0";
+  const VERSION = "1.0.1";
   const T = {
     en: {
       loading: "Loading photos …", none: "No photos found in this folder or album.", pick: "Choose a wall in the card settings.",
@@ -53,8 +53,13 @@
     }
     getCardSize() { return this._c && this._c.fullscreen ? 12 : 6; }
     getGridOptions() { return { columns: 12, rows: "auto", min_columns: 6 }; }
-    get _t() { const l = ((this._hass && (this._hass.locale?.language || this._hass.language)) || "en").slice(0, 2); return T[l] || T.en; }
-    get _lang() { return (this._hass && (this._hass.locale?.language || this._hass.language)) || navigator.language || "en"; }
+    // display pages (full screen) are shared screens: they speak the language of Home Assistant itself,
+    // not the browser default of a Cast device or kiosk user
+    get _lang() {
+      const h = this._hass;
+      return (h && ((this._c.fullscreen && !this._c.preview && h.config?.language) || h.locale?.language || h.language)) || navigator.language || "en";
+    }
+    get _t() { return T[this._lang.slice(0, 2)] || T.en; }
     _tz() { return (this._hass && this._hass.config && this._hass.config.time_zone) || undefined; }
     _parts(d) {
       // date and time in the time zone of Home Assistant (a streaming browser often runs in UTC)
