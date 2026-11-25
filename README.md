@@ -116,6 +116,8 @@ PosterWall finds screens by itself – nothing to type:
 
 **Show** starts the wall on that screen right away. **Always** keeps it there: Cast screens are checked every two minutes and started again when nothing else plays, Fully Kiosk gets the wall as start page, Echos get the wall's page back.
 
+**Screens never hang.** Every display page reports while it pins photos. When a kept Echo or Fully Kiosk tablet whose screen is on stops reporting, PosterWall gets it going again by itself, step by step: the page loads again (after 2 minutes), the screen opens the page anew (Echo: dashboard closed and opened), and finally the Echo restarts. **Reload screens** in the panel (or the button entity) does it at once.
+
 > **Echo Show with TECHO5.** One tap sets everything on the Echo – no settings to look for. The Echo streams the page from its dashboard server, so that server must be set up in TECHO5 once. A new wall's page appears in the Echo's list within about five minutes; until then **Show** says so.
 
 > **Google Cast needs HTTPS.** Cast devices only open Home Assistant over an `https://` address (Home Assistant Cloud, or your own domain with a certificate). The panel checks this and says so when it is missing.
@@ -158,6 +160,7 @@ Every wall is its own device with these entities (all can be used in automations
 | `sensor.<wall>_photos` | Number of photos found (attributes: reading, error) |
 | `sensor.<wall>_photos_read` | When the photos were last read (diagnostic) |
 | `button.<wall>_read_photos_again` | Look for new photos now |
+| `button.<wall>_reload_screens` | Load the wall again on every screen (Echo: restart) |
 
 ### Action `posterwall.show`
 
@@ -195,7 +198,7 @@ actions:
 
 ## How data is updated
 
-No entity polls. The photo list is read once at start, every 6 hours and on the button. Settings reach every screen at once over the Home Assistant connection. Each screen loads one photo at a time, shrinks it before drawing and reloads itself once a night, so it runs for months on old tablets.
+No entity polls. The photo list is read once at start, every 6 hours and on the button. Settings reach every screen at once over the Home Assistant connection. Each screen loads one photo at a time, shrinks it before drawing and reloads itself once a night, so it runs for months on old tablets. A page that stops is loaded again by the integration (see *Screens never hang*).
 
 ## Known limitations
 
@@ -214,6 +217,7 @@ No entity polls. The photo list is read once at start, every 6 hours and on the 
 | *No photos found* | The PosterWall panel (card *Photos*) and the sensor *Photos* show the reason. For media folders check that the folder holds JPG/PNG/WEBP files. |
 | *Custom element doesn't exist: posterwall-card* | Open the PosterWall panel once (it adds the card to the dashboard resources) and reload the page. |
 | Cast screen stays black | The address must be `https://` and reachable from the screen. Test the *display page* link on your phone in the same Wi-Fi. |
+| A screen shows the same photos and nothing moves | Tap **Reload screens** in the panel. Kept Echos and Fully Kiosk tablets are restarted by themselves after a few minutes. |
 | Echo: *Can't reach the dashboard server* | The Echo streams through the dashboard server of TECHO5. Start that server (container) again; PosterWall itself is not involved. |
 | *Sign in again* repair | Immich key revoked or Synology password changed – tap it and enter the new one. |
 
@@ -238,13 +242,15 @@ Diagnostics (*Settings → Devices & services → PosterWall → ⋮ → Downloa
 
 1. Über den Marketplace installieren und Home Assistant neu starten.
 2. *Einstellungen → Geräte & Dienste → Integration hinzufügen → PosterWall*: Quelle wählen (**Home Assistant Medien**, **Immich** oder **Synology Photos**), Ordner oder Album aussuchen, Wand benennen (z. B. *Küche*), Wetter und Kalender wählen.
-3. **PosterWall** in der Seitenleiste öffnen: Die Vorschau zeigt die fertige Wand, unter *Bildschirme* stehen die Anzeigen im Haus – **Zeigen** antippen, fertig.
+3. **PosterWall** in der Seitenleiste öffnen: Die Vorschau zeigt die fertige Wand, unter *Bildschirme* stehen die Anzeigen im Haus – **Anzeigen** antippen, fertig.
 
 **Einstellungen mit Live-Vorschau:** Ordner (bei Home Assistant Medien öffnet **Ordner wählen** deine echte Ordnerstruktur direkt im Panel – in jede Tiefe, mit Fotoanzahl je Ordner, Unterordner sind immer dabei; bei Immich und Synology Photos Album oder Ordner aus der Liste), Takt, Anzahl der Fotos, Größe, Effekt (*Abfallen*, *Überblenden*, *Wegwehen*, *Umdrehen*, *Zufall*), Hintergrund (*Kork*, *Holz*, *Schiefer*, *Schwarz*), Datum unter dem Foto, Uhr, Wetter, Termine, *Favoriten öfter* (Immich) und *Heute vor X Jahren* (etwa jedes dritte Foto stammt vom heutigen Tag eines früheren Jahres). Die Vorschau lässt sich auf das Format deines Bildschirms stellen.
 
 **Nacht:** Zwischen *Nacht ab* und *Nacht bis* wird die Wand gedimmt, zeigt nur die Uhr oder wird dunkel; bei *nur Uhr* und *dunkel* werden nachts keine Fotos geladen.
 
-**Bildschirme finden sich selbst:** Google Cast (Nest Hub, Chromecast, Fernseher), Tablets mit Fully Kiosk Browser, Browser mit Browser Mod und Echo Show mit TECHO5-Firmware erscheinen automatisch mit einem Knopf **Zeigen**. Der Schalter **Immer** hält die Wand dort: Cast-Geräte werden alle zwei Minuten geprüft und neu gestartet, wenn sonst nichts läuft, Fully Kiosk bekommt die Wand als Startseite, Echos bekommen die Seite zurück, wenn eine andere gewählt wurde. Beim Echo stellt ein Tipp alles ein (*Streamed*, die Seite der Wand, *auch im Leerlauf*); der Echo streamt über den Dashboard-Server von TECHO5, der einmal eingerichtet sein muss, und kennt eine neue Seite nach etwa fünf Minuten. Google Cast braucht eine `https://`-Adresse für Home Assistant (Home Assistant Cloud oder eigene Domain); das Panel prüft das. Jeder andere Bildschirm öffnet einfach den Link der *Anzeigeseite* im Kiosk-Browser.
+**Bildschirme finden sich selbst:** Google Cast (Nest Hub, Chromecast, Fernseher), Tablets mit Fully Kiosk Browser, Browser mit Browser Mod und Echo Show mit TECHO5-Firmware erscheinen automatisch mit einem Knopf **Anzeigen**. Der Schalter **Dauerhaft** hält die Wand dort: Cast-Geräte werden alle zwei Minuten geprüft und neu gestartet, wenn sonst nichts läuft, Fully Kiosk bekommt die Wand als Startseite, Echos bekommen die Seite zurück, wenn eine andere gewählt wurde. Beim Echo stellt ein Tipp alles ein (*Streamed*, die Seite der Wand, *auch im Leerlauf*); der Echo streamt über den Dashboard-Server von TECHO5, der einmal eingerichtet sein muss, und kennt eine neue Seite nach etwa fünf Minuten. Google Cast braucht eine `https://`-Adresse für Home Assistant (Home Assistant Cloud oder eigene Domain); das Panel prüft das. Jeder andere Bildschirm öffnet einfach den Link der *Anzeigeseite* im Kiosk-Browser.
+
+**Bildschirme hängen nie fest:** Jede Anzeigeseite meldet sich, solange sie Fotos anheftet. Meldet sich ein dauerhaft gezeigter Echo oder ein Fully-Kiosk-Tablet mit eingeschaltetem Bildschirm nicht mehr, bringt PosterWall ihn selbst wieder in Gang, Schritt für Schritt: Seite neu laden (nach 2 Minuten), Seite neu öffnen (Echo: Dashboard zu und wieder auf), zuletzt den Echo neu starten. **Bildschirme neu laden** im Panel (oder die Knopf-Entität) macht das sofort.
 
 **Quellen:** Bei Home Assistant Medien zählt jeder Ordner unter *Medien*, auch NAS-Freigaben (*Einstellungen → System → Speicher*); das Datum kommt aus dem Dateinamen oder einem Jahresordner. Für Immich reicht ein API-Schlüssel mit *asset.read*, *asset.view*, *album.read* und *user.read*. Synology Photos zeigt persönlichen und geteilten Bereich mit ihren echten Ordnern (wie im Reiter *Fotos*) und die Alben. Für Synology Photos am besten einen eigenen Benutzer nur mit Leserechten anlegen; bei Zwei-Faktor-Anmeldung fragt die Einrichtung einmal nach dem Code. Passwörter und Schlüssel bleiben in Home Assistant und gehen nie an einen Bildschirm.
 

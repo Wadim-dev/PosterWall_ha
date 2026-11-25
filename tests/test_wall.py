@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 import random
 
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.setup import async_setup_component
 import homeassistant.util.dt as dt_util
@@ -395,3 +395,134 @@ async def test_echo_show_techo5(hass: HomeAssistant, loaded: MockConfigEntry, ha
     # unknown Echo
     with pytest.raises(HomeAssistantError):
         await async_show(hass, loaded.entry_id, "techo5:select.gone_dashboard_to_show")
+
+
+async def test_screens_never_hang(hass: HomeAssistant, loaded: MockConfigEntry, hass_ws_client) -> None:
+    """A screen whose page stops is loaded again by itself; the button does it at once."""
+    from unittest.mock import patch
+
+    from custom_components.posterwall import watchdog as wd
+    from custom_components.posterwall.devices import async_reload_screen
+
+    hass.config.components.add("esphome")
+    esp = MockConfigEntry(domain="esphome")
+    esp.add_to_hass(hass)
+    dev_reg, ent_reg = dr.async_get(hass), er.async_get(hass)
+    echo = dev_reg.async_get_or_create(config_entry_id=esp.entry_id, identifiers={("esphome", "show8")}, name="Show8")
+    ent_reg.async_get_or_create("select", "esphome", "show8-dts", device_id=echo.id, suggested_object_id="show8_dashboard_to_show")
+    ent_reg.async_get_or_create("select", "esphome", "show8-d", device_id=echo.id, suggested_object_id="show8_dashboard")
+    hass.states.async_set("select.show8_dashboard", "Streamed", {"options": ["Off", "Streamed"]})
+    hass.states.async_set("select.show8_dashboard_to_show", "PosterWall Kitchen", {"options": ["Automatic", "PosterWall Kitchen"]})
+    hass.states.async_set("light.show8_screen", "on")
+    ent_reg.async_get_or_create("button", "esphome", "show8-restart", device_id=echo.id, suggested_object_id="show8_restart",
+                                original_device_class="restart")
+    calls: list[str] = []
+
+    async def record(call: ServiceCall) -> None:
+        calls.append(f"{call.domain}.{call.service}")
+
+    for name in ("show8_dashboard_hide", "show8_dashboard_show"):
+        hass.services.async_register("esphome", name, record)
+
+    @callback
+    def pressed(event) -> None:
+        if event.data["domain"] == "button" and event.data["service_data"].get("entity_id") == "button.show8_restart":
+            calls.append("button.press")
+
+    hass.bus.async_listen("call_service", pressed)
+    hass.services.async_register("select", "select_option", record)
+    hass.services.async_register("switch", "turn_on", record)
+    screen = "techo5:select.show8_dashboard_to_show"
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "posterwall/keep", "entry_id": loaded.entry_id, "screen": screen, "keep": True})
+    assert (await client.receive_json())["success"]
+    wall = loaded.runtime_data
+    dog = wall.watchdog
+    assert wd.screens_on(hass, wall) == [screen]
+    now = dt_util.utcnow() + timedelta(minutes=10)
+    # the page reports: all fine
+    await client.send_json_auto_id({"type": "posterwall/alive", "entry_id": loaded.entry_id, "client": "abc"})
+    assert (await client.receive_json())["success"]
+    with patch("custom_components.posterwall.watchdog.dt_util.utcnow", return_value=now), \
+            patch("custom_components.posterwall.devices.asyncio.sleep"):
+        wall.screens_alive["abc"] = now
+        await dog.async_check(now)
+        assert dog.short_since is None
+        # the page stops reporting: first the pages are told to load again …
+        wall.screens_alive["abc"] = now - timedelta(minutes=5)
+        token = wall.reload_token
+        await dog.async_check(now)
+        await dog.async_check(now + timedelta(minutes=1))
+        assert wall.reload_token == token + 1 and wall.payload()["reload"] == token + 1 and not calls
+        await dog.async_check(now + timedelta(minutes=2))
+        assert not calls
+        # … and when that does not help, the Echo streams the page anew
+        await dog.async_check(now + timedelta(minutes=4))
+        assert calls[:2] == ["esphome.show8_dashboard_hide", "esphome.show8_dashboard_show"] and dog.restarts == 1
+        # still nothing: the Echo itself restarts
+        calls.clear()
+        await dog.async_check(now + timedelta(minutes=6))
+        assert not calls
+        await dog.async_check(now + timedelta(minutes=10))
+        assert calls == ["button.press"] and dog.restarts == 2
+        # then it gets time to come back before it starts over
+        calls.clear()
+        await dog.async_check(now + timedelta(minutes=20))
+        assert not calls and dog.step == 3
+        await dog.async_check(now + timedelta(minutes=31))
+        assert dog.step == 0
+        await dog.async_check(now + timedelta(minutes=32))
+        assert dog.step == 1 and wall.reload_token == token + 2
+        # a page reports again: all fine
+        wall.screens_alive["abc"] = now + timedelta(minutes=32)
+        await dog.async_check(now + timedelta(minutes=33))
+        assert dog.step == 0 and dog.short_since is None
+        # screen off (night): nothing to watch
+        hass.states.async_set("light.show8_screen", "off")
+        assert wd.screens_on(hass, wall) == []
+        hass.states.async_set("light.show8_screen", "on")
+        # the button: pages load again at once and the Echo restarts
+        calls.clear()
+        await hass.services.async_call("button", "press", {"entity_id": "button.kitchen_reload_screens"}, blocking=True)
+        assert "button.press" in calls and wall.reload_token == token + 3
+        calls.clear()
+        await client.send_json_auto_id({"type": "posterwall/reload", "entry_id": loaded.entry_id})
+        assert (await client.receive_json())["success"]
+        assert calls == ["button.press"]
+    # an Echo whose actions are unknown still gets the page set; a failing screen does not stop the others
+    hass.services.async_remove("esphome", "show8_dashboard_show")
+    calls.clear()
+    await async_reload_screen(hass, loaded.entry_id, screen)
+    assert "esphome.show8_dashboard_hide" not in calls
+    with patch("custom_components.posterwall.watchdog.async_reload_screen", side_effect=RuntimeError("boom")):
+        await wd.async_restart_screens(hass, wall, [screen, screen])
+
+
+async def test_reload_other_screens(hass: HomeAssistant, loaded: MockConfigEntry) -> None:
+    """Fully Kiosk and Browser Mod screens load the wall again too."""
+    from custom_components.posterwall import watchdog as wd
+    from custom_components.posterwall.devices import async_reload_screen
+
+    calls: list[ServiceCall] = []
+
+    async def record(call: ServiceCall) -> None:
+        calls.append(call)
+
+    for dom, srv in (("fully_kiosk", "load_url"), ("fully_kiosk", "set_config"), ("browser_mod", "refresh")):
+        hass.services.async_register(dom, srv, record)
+    fk = MockConfigEntry(domain="fully_kiosk")
+    fk.add_to_hass(hass)
+    dev_reg, ent_reg = dr.async_get(hass), er.async_get(hass)
+    tab = dev_reg.async_get_or_create(config_entry_id=fk.entry_id, identifiers={("fully_kiosk", "tab")}, name="Tablet")
+    bm = dev_reg.async_get_or_create(config_entry_id=fk.entry_id, identifiers={("browser_mod", "b1")}, name="Browser")
+    await async_reload_screen(hass, loaded.entry_id, f"fully_kiosk:{tab.id}")
+    assert calls[-1].service == "load_url"
+    await async_reload_screen(hass, loaded.entry_id, f"browser_mod:{bm.id}")
+    assert calls[-1].service == "refresh" and calls[-1].data["browser_id"] == ["b1"]
+    # a kept tablet counts unless its screen is off
+    hass.config_entries.async_update_entry(loaded, options={**loaded.options, "devices": {f"fully_kiosk:{tab.id}": {"keep": True}}})
+    assert wd.screens_on(hass, loaded.runtime_data) == [f"fully_kiosk:{tab.id}"]
+    ent_reg.async_get_or_create("switch", "fully_kiosk", "tab-screen", device_id=tab.id, translation_key="screen",
+                                suggested_object_id="tablet_screen")
+    hass.states.async_set("switch.tablet_screen", "off")
+    assert wd.screens_on(hass, loaded.runtime_data) == []

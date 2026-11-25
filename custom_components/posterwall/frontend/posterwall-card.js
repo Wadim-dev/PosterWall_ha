@@ -4,7 +4,7 @@
    Robust on weak devices and streamed screens: one photo is loaded at a time (one in stock), every step has a time limit,
    a watchdog restarts a stalled wall, photos are decoded at most 720 px wide. */
 (() => {
-  const VERSION = "1.0.2";
+  const VERSION = "1.0.3";
   const T = {
     en: {
       loading: "Loading photos …", none: "No photos found in this folder or album.", pick: "Choose a wall in the card settings.",
@@ -158,7 +158,7 @@
       const old = this._p, o = old ? old.settings : {};
       this._p = p; this._s = p.settings;
       const s = this._s, w = this._wall;
-      if (!this._c.preview && this._c.fullscreen && old && p.version !== VERSION) this._reload(); // integration updated
+      if (!this._c.preview && this._c.fullscreen && old && (p.version !== VERSION || p.reload !== old.reload)) this._reload(); // integration updated or "reload screens"
       w.dataset.bg = s.background;
       this._root.querySelector(".clock").style.display = s.clock ? "" : "none";
       const weatherOn = s.weather && p.weather, eventsOn = s.events && p.calendars.length;
@@ -332,11 +332,19 @@
       this._pump();
       this._tickT = setTimeout(() => this._tick(), this._tickTime());
     }
+    _alive() {
+      // a full-screen page tells the integration it runs fine; when it stops, the integration loads it again
+      if (!this._c.fullscreen || this._c.preview || !this._hass) return;
+      if (!this._cid) this._cid = Math.random().toString(36).slice(2, 12);
+      this._hass.callWS({ type: "posterwall/alive", entry_id: this._c.wall, client: this._cid }).catch(() => {});
+    }
     _guard() {
       // no new photo for too long: restart loading and ticking (the photos stay);
       // after three tries reload a full-screen page (at most once an hour)
-      if (!this._on || !this._started || this._sleeping || !this._p || !this._p.photos) return;
+      if (!this._on || !this._p) return;
       const max = Math.max(4 * this._tickTime(), 120000);
+      if (this._sleeping || (this._started && Date.now() - this._last < max)) this._alive();
+      if (!this._started || this._sleeping || !this._p.photos) return;
       if (Date.now() - this._last < max) return;
       console.warn("PosterWall: no new photos, restarting");
       this._last = Date.now() - max / 2;
