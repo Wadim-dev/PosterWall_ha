@@ -1,0 +1,223 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Where are your photos?",
+        "description": "PosterWall pins your photos like a pinboard on any screen. Choose where the photos come from – you can change everything else later in the **PosterWall** panel.",
+        "menu_options": {
+          "media": "Home Assistant media (folder, NAS share, any media source)",
+          "immich": "Immich server",
+          "synology": "Synology Photos on a DiskStation"
+        }
+      },
+      "folder": {
+        "title": "Pick the folder",
+        "description": "You are in **{path}** – {photos} photos here, {folders} folders.\n\nOpen a folder or take this one with ✓. Sub folders are included automatically, and you can switch between them later.",
+        "data": {
+          "folder": "Folder"
+        }
+      },
+      "immich": {
+        "title": "Immich",
+        "description": "Address of your Immich server and an API key (Immich → Account settings → API keys; the permissions *asset.read*, *asset.view*, *album.read* and *user.read* are enough).",
+        "data": {
+          "url": "Address",
+          "api_key": "API key",
+          "verify_ssl": "Check the SSL certificate"
+        },
+        "data_description": {
+          "url": "For example http://192.168.1.20:2283"
+        }
+      },
+      "synology": {
+        "title": "Synology Photos",
+        "description": "Address of the DiskStation and a user that may use Synology Photos. Tip: create a separate user with read access only.",
+        "data": {
+          "url": "Address",
+          "username": "User",
+          "password": "Password",
+          "verify_ssl": "Check the SSL certificate"
+        },
+        "data_description": {
+          "url": "For example https://192.168.1.10:5001"
+        }
+      },
+      "otp": {
+        "title": "Two-factor code",
+        "description": "Type the current code of your authenticator app. The DiskStation then trusts PosterWall and does not ask again.",
+        "data": {
+          "otp": "Code"
+        }
+      },
+      "display": {
+        "title": "Almost done",
+        "description": "Photos from **{source}** are ready. Name the wall and choose what is shown next to the photos – everything can be changed later.",
+        "data": {
+          "name": "Name of the wall",
+          "weather": "Weather",
+          "calendars": "Calendars",
+          "events": "Number of events",
+          "event_days": "Show events of the next"
+        },
+        "data_description": {
+          "name": "For example Kitchen or Living room",
+          "weather": "Leave empty for no weather",
+          "calendars": "Leave empty for no events"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Sign in again",
+        "description": "{url} does not accept the stored sign-in anymore. Enter it again."
+      }
+    },
+    "error": {
+      "cannot_connect": "The server cannot be reached. Check the address.",
+      "invalid_auth": "Sign-in refused. Check user, password or API key.",
+      "invalid_otp": "The code was wrong or too old. Try the next one.",
+      "browse_failed": "This folder cannot be opened.",
+      "pick_folder": "Open a folder first."
+    },
+    "abort": {
+      "reconfigure_successful": "The photo source was changed.",
+      "reauth_successful": "Signed in again."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Weather and calendars",
+        "description": "Everything else – interval, effects, night mode, screens – is in the **PosterWall** panel in the sidebar.",
+        "data": {
+          "weather": "Weather",
+          "calendars": "Calendars",
+          "events": "Number of events",
+          "event_days": "Show events of the next"
+        }
+      }
+    }
+  },
+  "entity": {
+    "number": {
+      "interval": {
+        "name": "Interval"
+      },
+      "count": {
+        "name": "Photos on the wall"
+      },
+      "night_brightness": {
+        "name": "Night brightness"
+      }
+    },
+    "select": {
+      "album": {
+        "name": "Album"
+      },
+      "size": {
+        "name": "Photo size",
+        "state": {
+          "small": "Small",
+          "medium": "Medium",
+          "large": "Large"
+        }
+      },
+      "effect": {
+        "name": "Effect",
+        "state": {
+          "drop": "Drop",
+          "fade": "Fade",
+          "blow": "Blow away",
+          "flip": "Flip",
+          "random": "Random"
+        }
+      },
+      "background": {
+        "name": "Background",
+        "state": {
+          "cork": "Cork",
+          "wood": "Wood",
+          "slate": "Slate",
+          "black": "Black"
+        }
+      },
+      "night_mode": {
+        "name": "Night mode",
+        "state": {
+          "off": "Off",
+          "dim": "Dimmed",
+          "clock": "Clock only",
+          "dark": "Screen dark"
+        }
+      }
+    },
+    "switch": {
+      "clock": {
+        "name": "Clock"
+      },
+      "weather": {
+        "name": "Weather"
+      },
+      "events": {
+        "name": "Events"
+      },
+      "caption": {
+        "name": "Date under the photo"
+      },
+      "favorites": {
+        "name": "Favourites more often"
+      },
+      "on_this_day": {
+        "name": "On this day"
+      }
+    },
+    "time": {
+      "night_start": {
+        "name": "Night from"
+      },
+      "night_end": {
+        "name": "Night until"
+      }
+    },
+    "sensor": {
+      "photos": {
+        "name": "Photos",
+        "unit_of_measurement": "photos"
+      },
+      "last_read": {
+        "name": "Photos read"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Read photos again"
+      }
+    }
+  },
+  "services": {
+    "show": {
+      "name": "Show on a screen",
+      "description": "Shows a wall on a Google Cast screen, a Fully Kiosk tablet or a Browser Mod browser.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wall",
+          "description": "The wall to show."
+        },
+        "screen": {
+          "name": "Screen",
+          "description": "Screen id as listed in the PosterWall panel, for example cast:media_player.kitchen_display."
+        },
+        "keep": {
+          "name": "Keep showing",
+          "description": "Start the wall again when the screen has nothing else to do."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "unknown_screen": {
+      "message": "This screen is not known."
+    },
+    "unknown_wall": {
+      "message": "This wall is not known."
+    }
+  }
+}

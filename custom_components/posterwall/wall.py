@@ -1,0 +1,187 @@
+"""One poster wall: its photo source, live settings and photo list."""
+
+from __future__ import annotations
+
+from collections import deque
+from collections.abc import Callable
+from datetime import datetime, timedelta
+import logging
+from typing import Any
+
+from homeassistant.components import media_source
+from homeassistant.components.http.auth import async_sign_path
+from homeassistant.components.media_player import async_process_play_media_url
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
+
+from .const import (
+    ALBUM_ALL,
+    ALBUM_FAVORITES,
+    CONF_CALENDARS,
+    CONF_EVENT_DAYS,
+    CONF_EVENTS,
+    CONF_WEATHER,
+    DEFAULT_EVENT_DAYS,
+    DEFAULT_EVENTS,
+    DOMAIN,
+    PHOTO_URL,
+    REFRESH_HOURS,
+    SETTINGS_DEFAULTS,
+    SIGNAL_UPDATE,
+    VERSION,
+)
+from .sources import Album, Photo, PhotoSource, SourceError, pick
+
+_LOGGER = logging.getLogger(__name__)
+
+ALL_TITLE = {"de": "Alle Fotos", "en": "All photos"}
+FAV_TITLE = {"de": "Favoriten", "en": "Favourites"}
+
+
+class PosterWall:
+    """Runtime data of a config entry."""
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, source: PhotoSource) -> None:
+        self.hass = hass
+        self.entry = entry
+        self.source = source
+        self.store: Store[dict[str, Any]] = Store(hass, 1, f"{DOMAIN}.{entry.entry_id}")
+        self.settings: dict[str, Any] = dict(SETTINGS_DEFAULTS)
+        self.albums: list[Album] = []
+        self.photos: list[Photo] = []
+        self._by_id: dict[str, Photo] = {}
+        self.recent: deque[str] = deque(maxlen=60)
+        self.last_refresh: datetime | None = None
+        self.error: str | None = None
+        self.loading = False
+        self._unsubs: list[Callable[[], None]] = []
+
+    # ------------------------------------------------------------ lifecycle
+
+    async def async_start(self) -> None:
+        """Load the settings and the first photo list (raises SourceError)."""
+        stored = await self.store.async_load() or {}
+        self.settings.update({k: v for k, v in stored.items() if k in SETTINGS_DEFAULTS})
+        await self.source.async_validate()
+        self._unsubs.append(async_track_time_interval(self.hass, self._interval, timedelta(hours=REFRESH_HOURS)))
+
+    async def _interval(self, _now: datetime) -> None:
+        await self.async_refresh()
+
+    @callback
+    def async_stop(self) -> None:
+        while self._unsubs:
+            self._unsubs.pop()()
+
+    async def async_refresh(self) -> None:
+        """Read albums and photos again."""
+        if self.loading:
+            return
+        self.loading = True
+        self.async_notify()
+        try:
+            self.albums = await self.source.async_albums()
+            album = self.settings["album"]
+            keys = {a.key for a in self.albums} | {ALBUM_ALL} | ({ALBUM_FAVORITES} if self.source.has_favorites else set())
+            if album not in keys:
+                album = self.settings["album"] = ALBUM_ALL
+            photos = await self.source.async_photos(album)
+        except SourceError as err:
+            if self.error is None:
+                _LOGGER.warning("PosterWall %s: photos could not be read: %s", self.entry.title, err)
+            self.error = str(err)
+        else:
+            if self.error:
+                _LOGGER.info("PosterWall %s: photos can be read again", self.entry.title)
+            self.error = None
+            self.photos = photos
+            self._by_id = {p.id: p for p in photos}
+            self.recent.clear()
+            self.last_refresh = dt_util.utcnow()
+        finally:
+            self.loading = False
+            self.async_notify()
+
+    # ------------------------------------------------------------ settings
+
+    @callback
+    def async_notify(self) -> None:
+        async_dispatcher_send(self.hass, SIGNAL_UPDATE.format(entry_id=self.entry.entry_id))
+
+    async def async_set(self, key: str, value: Any) -> None:
+        """Change one live setting."""
+        if key not in SETTINGS_DEFAULTS:
+            raise KeyError(key)
+        old = self.settings.get(key)
+        self.settings[key] = value
+        self.store.async_delay_save(lambda: dict(self.settings), 2)
+        self.async_notify()
+        if key == "album" and old != value:
+            self.hass.async_create_task(self.async_refresh(), f"{DOMAIN} refresh")
+
+    def album_options(self) -> list[tuple[str, str]]:
+        """(key, title) of every album choice, "all" first."""
+        lang = "de" if (self.hass.config.language or "en").startswith("de") else "en"
+        opts = [(ALBUM_ALL, ALL_TITLE[lang])]
+        if self.source.has_favorites:
+            opts.append((ALBUM_FAVORITES, FAV_TITLE[lang]))
+        opts += [(a.key, a.title) for a in self.albums]
+        return opts
+
+    def payload(self) -> dict[str, Any]:
+        """Everything the card needs to know (no secrets)."""
+        o = self.entry.options
+        return {
+            "entry_id": self.entry.entry_id,
+            "title": self.entry.title,
+            "version": VERSION,
+            "settings": dict(self.settings),
+            "weather": o.get(CONF_WEATHER),
+            "calendars": list(o.get(CONF_CALENDARS) or []),
+            "events": int(o.get(CONF_EVENTS, DEFAULT_EVENTS)),
+            "event_days": int(o.get(CONF_EVENT_DAYS, DEFAULT_EVENT_DAYS)),
+            "photos": len(self.photos),
+            "loading": self.loading,
+            "error": self.error,
+            "source": self.source.kind,
+            "albums": [{"key": k, "title": t} for k, t in self.album_options()],
+        }
+
+    # ------------------------------------------------------------ photos
+
+    def photo(self, photo_id: str) -> Photo | None:
+        return self._by_id.get(photo_id)
+
+    async def async_next(self, count: int = 1) -> list[dict[str, Any]]:
+        """The next photos for a display, each with a short-lived URL."""
+        out: list[dict[str, Any]] = []
+        now = dt_util.now()
+        for _ in range(max(1, min(count, 4))):
+            chosen = pick(self.photos, self.recent, today=now, favorites=bool(self.settings["favorites"]),
+                          on_this_day=bool(self.settings["on_this_day"]))
+            if chosen is None:
+                break
+            photo, years = chosen
+            try:
+                url = await self._url(photo)
+            except SourceError as err:
+                _LOGGER.debug("Photo %s cannot be shown: %s", photo.id, err)
+                self.recent.append(photo.id)
+                continue
+            self.recent.append(photo.id)
+            out.append({"id": photo.id, "url": url, "date": photo.date, "years_ago": years, "favorite": photo.favorite})
+        return out
+
+    async def _url(self, photo: Photo) -> str:
+        if not self.source.proxied:
+            try:
+                play = await media_source.async_resolve_media(self.hass, photo.id, None)
+            except media_source.Unresolvable as err:
+                raise SourceError(str(err)) from err
+            return async_process_play_media_url(self.hass, play.url, allow_relative_url=True)
+        path = PHOTO_URL.format(entry_id=self.entry.entry_id, photo_id=photo.id)
+        return async_sign_path(self.hass, path, timedelta(hours=1))

@@ -1,0 +1,223 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Wo liegen deine Fotos?",
+        "description": "PosterWall heftet deine Fotos wie an eine Pinnwand – auf jedem Bildschirm. Wähle, woher die Fotos kommen. Alles andere stellst du später in der Seite **PosterWall** ein.",
+        "menu_options": {
+          "media": "Home-Assistant-Medien (Ordner, NAS-Freigabe, jede Medienquelle)",
+          "immich": "Immich-Server",
+          "synology": "Synology Photos auf einer DiskStation"
+        }
+      },
+      "folder": {
+        "title": "Ordner wählen",
+        "description": "Du bist in **{path}** – hier {photos} Fotos, {folders} Ordner.\n\nÖffne einen Ordner oder nimm diesen mit ✓. Unterordner sind automatisch dabei, zwischen ihnen kannst du später umschalten.",
+        "data": {
+          "folder": "Ordner"
+        }
+      },
+      "immich": {
+        "title": "Immich",
+        "description": "Adresse deines Immich-Servers und ein API-Schlüssel (Immich → Kontoeinstellungen → API-Schlüssel; die Rechte *asset.read*, *asset.view*, *album.read* und *user.read* genügen).",
+        "data": {
+          "url": "Adresse",
+          "api_key": "API-Schlüssel",
+          "verify_ssl": "SSL-Zertifikat prüfen"
+        },
+        "data_description": {
+          "url": "Zum Beispiel http://192.168.1.20:2283"
+        }
+      },
+      "synology": {
+        "title": "Synology Photos",
+        "description": "Adresse der DiskStation und ein Benutzer, der Synology Photos nutzen darf. Tipp: einen eigenen Benutzer nur mit Leserechten anlegen.",
+        "data": {
+          "url": "Adresse",
+          "username": "Benutzer",
+          "password": "Passwort",
+          "verify_ssl": "SSL-Zertifikat prüfen"
+        },
+        "data_description": {
+          "url": "Zum Beispiel https://192.168.1.10:5001"
+        }
+      },
+      "otp": {
+        "title": "Bestätigungscode",
+        "description": "Gib den aktuellen Code aus deiner Authenticator-App ein. Danach vertraut die DiskStation PosterWall und fragt nicht mehr.",
+        "data": {
+          "otp": "Code"
+        }
+      },
+      "display": {
+        "title": "Fast fertig",
+        "description": "Die Fotos aus **{source}** sind bereit. Gib der Wand einen Namen und wähle, was neben den Fotos erscheint – alles lässt sich später ändern.",
+        "data": {
+          "name": "Name der Wand",
+          "weather": "Wetter",
+          "calendars": "Kalender",
+          "events": "Anzahl Termine",
+          "event_days": "Termine der nächsten"
+        },
+        "data_description": {
+          "name": "Zum Beispiel Küche oder Wohnzimmer",
+          "weather": "Leer lassen für kein Wetter",
+          "calendars": "Leer lassen für keine Termine"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Neu anmelden",
+        "description": "{url} nimmt die gespeicherte Anmeldung nicht mehr an. Bitte neu eingeben."
+      }
+    },
+    "error": {
+      "cannot_connect": "Der Server ist nicht erreichbar. Prüfe die Adresse.",
+      "invalid_auth": "Anmeldung abgelehnt. Prüfe Benutzer, Passwort oder API-Schlüssel.",
+      "invalid_otp": "Der Code war falsch oder zu alt. Nimm den nächsten.",
+      "browse_failed": "Dieser Ordner lässt sich nicht öffnen.",
+      "pick_folder": "Öffne zuerst einen Ordner."
+    },
+    "abort": {
+      "reconfigure_successful": "Die Fotoquelle wurde geändert.",
+      "reauth_successful": "Wieder angemeldet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Wetter und Kalender",
+        "description": "Alles andere – Wechsel, Effekte, Nachtmodus, Bildschirme – findest du in der Seite **PosterWall** in der Seitenleiste.",
+        "data": {
+          "weather": "Wetter",
+          "calendars": "Kalender",
+          "events": "Anzahl Termine",
+          "event_days": "Termine der nächsten"
+        }
+      }
+    }
+  },
+  "entity": {
+    "number": {
+      "interval": {
+        "name": "Wechsel"
+      },
+      "count": {
+        "name": "Fotos an der Wand"
+      },
+      "night_brightness": {
+        "name": "Helligkeit nachts"
+      }
+    },
+    "select": {
+      "album": {
+        "name": "Album"
+      },
+      "size": {
+        "name": "Fotogröße",
+        "state": {
+          "small": "Klein",
+          "medium": "Mittel",
+          "large": "Groß"
+        }
+      },
+      "effect": {
+        "name": "Effekt",
+        "state": {
+          "drop": "Abfallen",
+          "fade": "Überblenden",
+          "blow": "Wegwehen",
+          "flip": "Umdrehen",
+          "random": "Zufall"
+        }
+      },
+      "background": {
+        "name": "Hintergrund",
+        "state": {
+          "cork": "Kork",
+          "wood": "Holz",
+          "slate": "Schiefer",
+          "black": "Schwarz"
+        }
+      },
+      "night_mode": {
+        "name": "Nachtmodus",
+        "state": {
+          "off": "Aus",
+          "dim": "Abgedunkelt",
+          "clock": "Nur Uhr",
+          "dark": "Bildschirm dunkel"
+        }
+      }
+    },
+    "switch": {
+      "clock": {
+        "name": "Uhr"
+      },
+      "weather": {
+        "name": "Wetter"
+      },
+      "events": {
+        "name": "Termine"
+      },
+      "caption": {
+        "name": "Datum unter dem Foto"
+      },
+      "favorites": {
+        "name": "Favoriten öfter"
+      },
+      "on_this_day": {
+        "name": "An diesem Tag"
+      }
+    },
+    "time": {
+      "night_start": {
+        "name": "Nacht ab"
+      },
+      "night_end": {
+        "name": "Nacht bis"
+      }
+    },
+    "sensor": {
+      "photos": {
+        "name": "Fotos",
+        "unit_of_measurement": "Fotos"
+      },
+      "last_read": {
+        "name": "Fotos eingelesen"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Fotos neu einlesen"
+      }
+    }
+  },
+  "services": {
+    "show": {
+      "name": "Auf Bildschirm zeigen",
+      "description": "Zeigt eine Wand auf einem Google-Cast-Bildschirm, einem Fully-Kiosk-Tablet oder einem Browser-Mod-Browser.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Wand",
+          "description": "Die Wand, die gezeigt wird."
+        },
+        "screen": {
+          "name": "Bildschirm",
+          "description": "Kennung wie in der Seite PosterWall, zum Beispiel cast:media_player.kueche_display."
+        },
+        "keep": {
+          "name": "Dauerhaft zeigen",
+          "description": "Startet die Wand neu, wenn auf dem Bildschirm nichts anderes läuft."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "unknown_screen": {
+      "message": "Dieser Bildschirm ist unbekannt."
+    },
+    "unknown_wall": {
+      "message": "Diese Wand ist unbekannt."
+    }
+  }
+}

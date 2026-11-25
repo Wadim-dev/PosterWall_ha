@@ -1,0 +1,41 @@
+# New version in custom_components/posterwall/manifest.json on main
+# -> tag v<version> and a GitHub release with the section from CHANGELOG.md.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - custom_components/posterwall/manifest.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read version and notes
+        id: v
+        run: |
+          VERSION=$(python3 -c "import json;print(json.load(open('custom_components/posterwall/manifest.json'))['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          python3 - "$VERSION" > notes.md <<'PY'
+          import re, sys
+          v = sys.argv[1]
+          t = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(r"^## \[?" + re.escape(v) + r"\b.*?(?=^## |\Z)", t, re.M | re.S)
+          print("\n".join(m.group(0).splitlines()[1:]).strip() if m else "See CHANGELOG.md")
+          PY
+      - name: Create release (only if the version does not exist yet)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=${{ steps.v.outputs.version }}
+          if gh release view "v$V" >/dev/null 2>&1; then
+            echo "v$V exists already"
+          else
+            gh release create "v$V" --target "$GITHUB_SHA" --title "$V" --notes-file notes.md
+          fi

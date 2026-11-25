@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💡 Idea or suggestion
+    url: https://github.com/Wadim-dev/PosterWall_ha/discussions/new?category=ideas
+    about: Share an idea for PosterWall. Others can vote with 👍, good ideas become issues.
+  - name: ❓ Question or help
+    url: https://github.com/Wadim-dev/PosterWall_ha/discussions
+    about: Ask how something works or share your setup.

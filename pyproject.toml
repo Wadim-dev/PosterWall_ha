@@ -1,0 +1,17 @@
+[tool.ruff]
+target-version = "py313"
+line-length = 140
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "RUF", "TRY", "UP", "W"]
+ignore = ["E501", "RUF001", "RUF002", "RUF003", "TRY003", "TRY300"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+combine-as-imports = true
+split-on-trailing-comma = false
+known-first-party = ["custom_components"]
+known-third-party = ["homeassistant"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "raise NotImplementedError", "if TYPE_CHECKING:"]

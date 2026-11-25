@@ -1,0 +1,16 @@
+show:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: posterwall
+    screen:
+      required: true
+      example: "cast:media_player.kitchen_display"
+      selector:
+        text:
+    keep:
+      default: false
+      selector:
+        boolean:

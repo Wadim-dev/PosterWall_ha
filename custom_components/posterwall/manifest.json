@@ -1,0 +1,25 @@
+{
+  "domain": "posterwall",
+  "name": "PosterWall",
+  "after_dependencies": [
+    "cast",
+    "frontend",
+    "fully_kiosk",
+    "panel_custom"
+  ],
+  "codeowners": [
+    "@Wadim-dev"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "http",
+    "media_source"
+  ],
+  "documentation": "https://github.com/Wadim-dev/PosterWall_ha",
+  "integration_type": "service",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/Wadim-dev/PosterWall_ha/issues",
+  "loggers": [],
+  "requirements": [],
+  "version": "1.0.0"
+}

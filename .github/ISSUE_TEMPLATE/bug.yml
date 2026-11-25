@@ -1,0 +1,50 @@
+name: 🐞 Bug report
+description: Something in PosterWall does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time! Ideas and questions are better placed in [Discussions](https://github.com/Wadim-dev/PosterWall_ha/discussions).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: PosterWall version
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: ha
+    attributes:
+      label: Home Assistant version
+      placeholder: "2026.11.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: Photo source
+      options: ["Home Assistant media", "Immich", "Synology Photos"]
+  - type: input
+    id: screen
+    attributes:
+      label: Screen
+      placeholder: "Nest Hub via Google Cast / Fire tablet with Fully Kiosk / …"
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: Home Assistant log lines mentioning `posterwall`, and for display problems the browser console of the screen if you can.
+      render: text
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics (optional)
+      description: Settings → Devices & services → PosterWall → ⋮ → Download diagnostics, then drag the file here. It contains no addresses, users, passwords or keys.

@@ -1,0 +1,38 @@
+{
+  "entity": {
+    "number": {
+      "interval": {"default": "mdi:timer-outline"},
+      "count": {"default": "mdi:image-multiple-outline"},
+      "night_brightness": {"default": "mdi:brightness-4"}
+    },
+    "select": {
+      "album": {"default": "mdi:folder-image"},
+      "size": {"default": "mdi:resize"},
+      "effect": {"default": "mdi:animation-play-outline"},
+      "background": {"default": "mdi:texture-box"},
+      "night_mode": {"default": "mdi:weather-night"}
+    },
+    "switch": {
+      "clock": {"default": "mdi:clock-outline"},
+      "weather": {"default": "mdi:weather-partly-cloudy"},
+      "events": {"default": "mdi:calendar-text"},
+      "caption": {"default": "mdi:format-text"},
+      "favorites": {"default": "mdi:heart-outline"},
+      "on_this_day": {"default": "mdi:calendar-clock"}
+    },
+    "time": {
+      "night_start": {"default": "mdi:weather-night"},
+      "night_end": {"default": "mdi:weather-sunny"}
+    },
+    "sensor": {
+      "photos": {"default": "mdi:image-multiple"},
+      "last_read": {"default": "mdi:folder-refresh-outline"}
+    },
+    "button": {
+      "refresh": {"default": "mdi:folder-refresh"}
+    }
+  },
+  "services": {
+    "show": {"service": "mdi:cast"}
+  }
+}

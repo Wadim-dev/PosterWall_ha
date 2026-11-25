@@ -1,0 +1,80 @@
+rules:
+  # Bronze
+  action-setup: done
+  appropriate-polling:
+    status: done
+    comment: No entity polls. The photo list is read at start, every 6 hours and on the button.
+  brands: done
+  common-modules: done
+  config-flow-test-coverage: done
+  config-flow: done
+  dependency-transparency:
+    status: exempt
+    comment: No external Python requirements; Immich and Synology are spoken to over aiohttp.
+  docs-actions: done
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: done
+  entity-event-setup: done
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure: done
+  test-before-setup: done
+  unique-config-entry: done
+
+  # Silver
+  action-exceptions: done
+  config-entry-unloading: done
+  docs-configuration-parameters: done
+  docs-installation-parameters: done
+  entity-unavailable:
+    status: exempt
+    comment: >
+      The settings live in Home Assistant and are always available. When the source cannot be read,
+      the wall keeps the last photo list and the photos sensor reports the error as attribute.
+  integration-owner: done
+  log-when-unavailable: done
+  parallel-updates: done
+  reauthentication-flow: done
+  test-coverage: done
+
+  # Gold
+  devices: done
+  diagnostics: done
+  discovery:
+    status: exempt
+    comment: Photo sources are folders or servers chosen by the user; there is nothing to discover.
+  discovery-update-info:
+    status: exempt
+    comment: No discovery.
+  docs-data-update: done
+  docs-examples: done
+  docs-known-limitations: done
+  docs-supported-devices: done
+  docs-supported-functions: done
+  docs-troubleshooting: done
+  docs-use-cases: done
+  dynamic-devices:
+    status: exempt
+    comment: One service device per wall, created and removed with the wall.
+  entity-category: done
+  entity-device-class: done
+  entity-disabled-by-default:
+    status: exempt
+    comment: Every entity is a setting people change or a status they look at.
+  entity-translations: done
+  exception-translations: done
+  icon-translations: done
+  reconfiguration-flow: done
+  repair-issues:
+    status: exempt
+    comment: Sign-in problems use the reauthentication flow; the panel shows source errors.
+  stale-devices:
+    status: exempt
+    comment: The device belongs to its config entry and goes with it.
+
+  # Platinum
+  async-dependency: done
+  inject-websession: done
+  strict-typing: todo
