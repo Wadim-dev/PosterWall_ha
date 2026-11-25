@@ -24,6 +24,7 @@ from .const import (
     CONF_CALENDARS,
     CONF_EVENT_DAYS,
     CONF_EVENTS,
+    CONF_FOLDER_TITLE,
     CONF_WEATHER,
     DEFAULT_EVENT_DAYS,
     DEFAULT_EVENTS,
@@ -159,6 +160,7 @@ class PosterWall:
             "loading": self.loading,
             "error": self.error,
             "source": self.source.kind,
+            "folder_title": self.entry.data.get(CONF_FOLDER_TITLE),
             "albums": [{"key": k, "title": t} for k, t in self.album_options()],
         }
 

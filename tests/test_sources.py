@@ -188,6 +188,80 @@ async def test_synology_wall(hass: HomeAssistant, synology: MockConfigEntry, aio
         SynologyPhotoSource._call = SynologyPhotoSource._real_call
 
 
+async def test_synology_folders(hass: HomeAssistant, synology: MockConfigEntry) -> None:
+    """The real folders of Synology Photos (Photos tab), like on the DiskStation."""
+    from custom_components.posterwall.sources import SynologyPhotoSource
+
+    calls: list[dict] = []
+    tree = {1: [{"id": 10, "name": "/2019"}, {"id": 11, "name": "/Trips"}, {"id": 13, "name": "/@eaDir"}],
+            11: [{"id": 12, "name": "/Trips/Rome"}], 20: [{"id": 21, "name": "/Family"}]}
+
+    async def fake_call(self, api, method, params=None, *, raw=False, post=False, retry=True):
+        params = params or {}
+        calls.append({"api": api, "method": method, **params})
+        if api == "SYNO.API.Auth":
+            return {"sid": "S"}
+        if api.endswith("Browse.Folder"):
+            if method == "get":
+                return {"folder": {"id": 20 if "Team" in api else 1, "name": "/"}}
+            return {"list": tree.get(params["id"], [])}
+        if api == "SYNO.Foto.Browse.Album":
+            return {"list": []}
+        if api.endswith("Browse.Item") and method == "list":
+            return {"list": [_item(params.get("folder_id", 1))]}
+        return {"count": 1}
+
+    SynologyPhotoSource._real_call = SynologyPhotoSource._call
+    try:
+        SynologyPhotoSource._call = fake_call
+        assert await hass.config_entries.async_setup(synology.entry_id)
+        await hass.async_block_till_done(wait_background_tasks=True)
+        wall = synology.runtime_data
+        wall.source._apis = {k: {} for k in ("SYNO.Foto.Browse.Folder", "SYNO.FotoTeam.Browse.Folder", "SYNO.FotoTeam.Browse.Item")}
+        await wall.async_refresh()
+        assert hass.states.get("select.hall_album").attributes["options"] == [
+            "All photos", "Personal space", "Personal space / 2019", "Personal space / Trips", "Personal space / Trips / Rome",
+            "Shared space", "Shared space / Family"]
+        # a folder with everything below it
+        await hass.services.async_call("select", "select_option", {"entity_id": "select.hall_album", "option": "Personal space / Trips"},
+                                       blocking=True)
+        await hass.async_block_till_done(wait_background_tasks=True)
+        read = sorted(c["folder_id"] for c in calls if c["method"] == "list" and "folder_id" in c)
+        assert read == [11, 12]
+        assert len(wall.photos) == 2
+        await hass.services.async_call("select", "select_option", {"entity_id": "select.hall_album", "option": "Shared space / Family"},
+                                       blocking=True)
+        await hass.async_block_till_done(wait_background_tasks=True)
+        last = [c for c in calls if c["method"] == "list" and "folder_id" in c][-1]
+        assert last == {"api": "SYNO.FotoTeam.Browse.Item", "method": "list", "folder_id": 21, "offset": 0, "limit": 1000,
+                        "additional": '["thumbnail"]'}
+    finally:
+        SynologyPhotoSource._call = SynologyPhotoSource._real_call
+
+
+async def test_synology_without_folders(hass: HomeAssistant, synology: MockConfigEntry) -> None:
+    """Older DiskStations without the folder API keep spaces and albums."""
+    from custom_components.posterwall.sources import SourceError as SErr, SynologyPhotoSource
+
+    async def fake_call(self, api, method, params=None, *, raw=False, post=False, retry=True):
+        if api.endswith("Browse.Folder"):
+            raise SErr("no")
+        if api == "SYNO.Foto.Browse.Album":
+            return {"list": []}
+        return {"list": []} if method == "list" else {"count": 0}
+
+    source = SynologyPhotoSource(hass, dict(synology.data))
+    source._sid = "S"
+    source._apis = {"SYNO.Foto.Browse.Folder": {}}
+    SynologyPhotoSource._real_call = SynologyPhotoSource._call
+    try:
+        SynologyPhotoSource._call = fake_call
+        assert [a.key for a in await source.async_albums()] == ["personal"]
+        assert await source.async_photos("f99") == []
+    finally:
+        SynologyPhotoSource._call = SynologyPhotoSource._real_call
+
+
 async def test_synology_session_expired(hass: HomeAssistant, synology: MockConfigEntry, aioclient_mock: AiohttpClientMocker) -> None:
     from custom_components.posterwall.sources import SynologyPhotoSource
 

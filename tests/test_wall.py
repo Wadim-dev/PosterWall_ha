@@ -393,5 +393,5 @@ async def test_echo_show_techo5(hass: HomeAssistant, loaded: MockConfigEntry, ha
     await hass.async_block_till_done(wait_background_tasks=True)
     assert hass.states.get("select.show8_dashboard_to_show").state == "PosterWall Kitchen"
     # unknown Echo
-    with pytest.raises(Exception):
+    with pytest.raises(HomeAssistantError):
         await async_show(hass, loaded.entry_id, "techo5:select.gone_dashboard_to_show")

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.2
+
+- **Choose folder** on the PosterWall page: your real folder tree (Home Assistant media), any depth, with the number of photos in each folder. Sub folders are always included; a folder outside the wall's folder becomes its new folder.
+- **Echo Show with TECHO5** is found by itself: one tap sets *Streamed*, the wall's page and *also when idle*. *Always* sets the page back when another one was picked.
+- *Reconfigure* asks for the source first (switch between Home Assistant media, Immich and Synology Photos) and starts in the folder the wall shows now.
+- Synology Photos: the real folders of the personal and shared space, not only albums.
+- A renamed wall renames its display page too.
+- A deeper folder that was deleted falls back to all photos instead of an error.
+- Quality scale **Platinum**: strict typing checked on every change.
+
 ## 1.0.1
 
 - Big photo libraries: a chosen album or folder is now read on its own, so it is complete even when the whole library has more than 50,000 photos. The album list is read much faster.

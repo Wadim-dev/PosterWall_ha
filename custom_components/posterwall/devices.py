@@ -105,9 +105,9 @@ def find_screens(hass: HomeAssistant) -> list[Screen]:
             if mode is None or STREAMED not in (mode.attributes.get("options") or []):
                 continue
             dev = dev_reg.async_get(ent.device_id) if ent.device_id else None
-            name = (dev.name_by_user or dev.name) if dev else None
+            echo_name: str | None = (dev.name_by_user or dev.name) if dev else None
             state = hass.states.get(ent.entity_id)
-            screens.append(Screen(f"{KIND_TECHO5}:{ent.entity_id}", KIND_TECHO5, name or ent.entity_id,
+            screens.append(Screen(f"{KIND_TECHO5}:{ent.entity_id}", KIND_TECHO5, echo_name or ent.entity_id,
                                   state.state if state else None, area_name(ent.area_id or (dev.area_id if dev else None)),
                                   dev.model if dev else None))
     screens.sort(key=lambda s: (s.area or "~", s.name.lower()))

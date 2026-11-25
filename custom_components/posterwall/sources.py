@@ -587,4 +587,6 @@ def pick(photos: list[Photo], recent: Iterable[str], *, today: datetime, favorit
         p = r.choice(photos)
         if _name(p.id) not in seen:
             return p, None
-    return r.choice(photos), None
+    # many photos were shown just before: choose among the others (only all shown → any)
+    fresh = [p for p in photos if _name(p.id) not in seen]
+    return r.choice(fresh or photos), None
