@@ -196,6 +196,9 @@
       }
     },
     "button": {
+      "reload_screens": {
+        "name": "Bildschirme neu laden"
+      },
       "refresh": {
         "name": "Fotos neu einlesen"
       }

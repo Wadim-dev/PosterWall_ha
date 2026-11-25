@@ -33,6 +33,7 @@ from .devices import async_set_keep, async_show, needs_restart
 from .sources import AuthError, SourceError, create_source
 from .view import PhotoView
 from .wall import PosterWall
+from .watchdog import Watchdog
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -109,6 +110,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: PosterWallConfigEntry) -
                     _LOGGER.debug("Screen %s could not be started again: %s", screen, err)
 
     entry.async_on_unload(async_track_time_interval(hass, keep_alive, timedelta(minutes=2)))
+    wall.watchdog = Watchdog(hass, wall)
+    entry.async_on_unload(async_track_time_interval(hass, wall.watchdog.async_check, timedelta(minutes=1)))
     entry.async_on_unload(entry.add_update_listener(_options_changed))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     if "frontend" in hass.config.components:

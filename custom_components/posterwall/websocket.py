@@ -34,11 +34,12 @@ from .const import (
     SOURCE_MEDIA,
 )
 from .devices import async_set_keep, async_show, cast_ready, dashboard_path, find_screens
+from .watchdog import async_reload_everything
 
 
 @callback
 def async_register(hass: HomeAssistant) -> None:
-    for cmd in (ws_walls, ws_subscribe, ws_next, ws_set, ws_options, ws_refresh, ws_screens, ws_show, ws_keep, ws_browse, ws_folder):
+    for cmd in (ws_walls, ws_subscribe, ws_next, ws_set, ws_options, ws_refresh, ws_screens, ws_show, ws_keep, ws_browse, ws_folder, ws_alive, ws_reload):
         async_register_command(hass, cmd)
 
 
@@ -300,4 +301,25 @@ async def ws_folder(hass: HomeAssistant, connection: ActiveConnection, msg: dict
         hass.config_entries.async_update_entry(wall.entry, data={
             **wall.entry.data, CONF_FOLDER: folder, CONF_FOLDER_TITLE: " / ".join(t for _, t in chain[1:]) or folder})
         hass.config_entries.async_schedule_reload(wall.entry.entry_id)
+    connection.send_result(msg["id"])
+
+
+@websocket_command({vol.Required("type"): "posterwall/alive", vol.Required("entry_id"): str, vol.Required("client"): vol.All(str, vol.Length(max=40))})
+@callback
+def ws_alive(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]) -> None:
+    """A full-screen display page is running fine."""
+    if (wall := _wall(hass, connection, msg)) is None:
+        return
+    wall.async_alive(msg["client"])
+    connection.send_result(msg["id"])
+
+
+@websocket_command({vol.Required("type"): "posterwall/reload", vol.Required("entry_id"): str})
+@require_admin
+@async_response
+async def ws_reload(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]) -> None:
+    """Load the wall again on every screen."""
+    if (wall := _wall(hass, connection, msg)) is None:
+        return
+    await async_reload_everything(hass, wall)
     connection.send_result(msg["id"])

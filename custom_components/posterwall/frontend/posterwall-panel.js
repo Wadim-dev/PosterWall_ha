@@ -1,7 +1,7 @@
 // PosterWall – sidebar panel: live preview, every setting of a wall and the screens of the house.
 // The display page of each wall (a dashboard "posterwall-<id>") is created here automatically and removed
 // again when its wall is deleted. No polling: the wall pushes every change over the websocket.
-const VERSION = "1.0.2";
+const VERSION = "1.0.3";
 const REPO = "https://github.com/Wadim-dev/PosterWall_ha";
 
 const TX = {
@@ -23,6 +23,7 @@ const TX = {
     backgrounds: { cork: "Cork", wood: "Wood", slate: "Slate", black: "Black" },
     nights: { off: "Normal", dim: "Dimmed", clock: "Clock only", dark: "Dark" },
     sources: { media: "Home Assistant media", immich: "Immich", synology: "Synology Photos" },
+    reloadAll: "Reload screens", reloadHint: "Loads the wall again on every screen (also Echos). Happens by itself when a screen shows no new photos for a few minutes.", reloaded: "Screens load again",
     change: "Change", show: "Show", showing: "Shows", keep: "Always", keepHint: "Starts the wall again when the screen has nothing else to do – never interrupts music or videos.",
     page: "Display page", pageReady: "ready", pageMaking: "is being created …", openPage: "Open", copy: "Copy link", copied: "Link copied",
     linkHint: "Any other screen (a TV browser, an old tablet, a streamed Echo Show) simply opens this link.",
@@ -54,6 +55,7 @@ const TX = {
     backgrounds: { cork: "Kork", wood: "Holz", slate: "Schiefer", black: "Schwarz" },
     nights: { off: "Normal", dim: "Abgedunkelt", clock: "Nur Uhr", dark: "Dunkel" },
     sources: { media: "Home-Assistant-Medien", immich: "Immich", synology: "Synology Photos" },
+    reloadAll: "Bildschirme neu laden", reloadHint: "Lädt die Wand auf allen Bildschirmen neu (auch Echos). Passiert von selbst, wenn ein Bildschirm ein paar Minuten keine neuen Fotos zeigt.", reloaded: "Bildschirme laden neu",
     change: "Ändern", show: "Anzeigen", showing: "Zeigt", keep: "Dauerhaft", keepHint: "Startet die Wand neu, wenn auf dem Bildschirm nichts anderes läuft – unterbricht nie Musik oder Videos.",
     page: "Anzeige-Seite", pageReady: "bereit", pageMaking: "wird angelegt …", openPage: "Öffnen", copy: "Link kopieren", copied: "Link kopiert",
     linkHint: "Jeder andere Bildschirm (Browser am Fernseher, altes Tablet, gestreamte Echo Show) öffnet einfach diesen Link.",
@@ -464,7 +466,8 @@ class PosterWallPanel extends HTMLElement {
     const sc = this._sc || { screens: [], kept: {}, integrations: {} };
     const url = `${location.origin}/${w.dashboard}/wall`;
     const missing = INSTALL.filter(([k]) => !sc.integrations[k]);
-    box.innerHTML = `<h2><ha-icon icon="mdi:monitor-share"></ha-icon><span class="grow">${esc(t.screens)}</span></h2>
+    box.innerHTML = `<h2><ha-icon icon="mdi:monitor-share"></ha-icon><span class="grow">${esc(t.screens)}</span>
+        <button class="btn flat" data-reload title="${esc(t.reloadHint)}"><ha-icon icon="mdi:monitor-arrow-down"></ha-icon>${esc(t.reloadAll)}</button></h2>
       ${sc.screens.length ? sc.screens.map((s) => {
         const kept = sc.kept[s.id];
         return `<div class="screen"><div class="ic"><ha-icon icon="${KIND_ICON[s.kind] || "mdi:monitor"}"></ha-icon></div>
@@ -491,6 +494,12 @@ class PosterWallPanel extends HTMLElement {
       try { await this._hass.callWS({ type: "posterwall/keep", entry_id: this._sel, screen: el.dataset.keep, keep: el.checked }); } catch (e) { this._toast(e.message); }
       this._loadScreens();
     }));
+    box.querySelector("[data-reload]").addEventListener("click", async (ev) => {
+      const b = ev.currentTarget; b.disabled = true;
+      try { await this._hass.callWS({ type: "posterwall/reload", entry_id: this._sel }); this._toast(t.reloaded); }
+      catch (e) { this._toast(`${t.failed} ${e.message || e.code}`); }
+      b.disabled = false;
+    });
     box.querySelector("[data-copy]").addEventListener("click", async () => {
       try { await navigator.clipboard.writeText(url); this._toast(t.copied); } catch (e) { this._toast(url); }
     });

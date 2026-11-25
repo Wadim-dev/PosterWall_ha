@@ -10,6 +10,7 @@ Only public actions of the other integrations are used:
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 import logging
 from typing import Any
@@ -20,6 +21,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 from homeassistant.helpers.network import NoURLAvailableError, get_url
+from homeassistant.util import slugify
 
 from .const import CONF_DEVICES, DOMAIN
 
@@ -171,6 +173,60 @@ async def _techo5_show(hass: HomeAssistant, entry_id: str, show_select: str) -> 
     idle = hass.states.get(f"switch.{base.split('.', 1)[1]}{TECHO5_IDLE}")
     if idle is not None and idle.state == STATE_OFF:
         await hass.services.async_call("switch", "turn_on", {"entity_id": idle.entity_id}, blocking=True)
+
+
+def _techo5_node(hass: HomeAssistant, show_select: str) -> str | None:
+    """ESPHome node name of an Echo (its actions are named "<node>_dashboard_show")."""
+    ent = er.async_get(hass).async_get(show_select)
+    if ent is None:
+        return None
+    names: list[str] = []
+    entry = hass.config_entries.async_get_entry(ent.config_entry_id) if ent.config_entry_id else None
+    if entry is not None:
+        info = getattr(getattr(entry, "runtime_data", None), "device_info", None)
+        names += [str(n) for n in (getattr(info, "name", None), entry.data.get("device_name")) if n]
+    dev = dr.async_get(hass).async_get(ent.device_id) if ent.device_id else None
+    if dev is not None and dev.name:
+        names.append(slugify(dev.name))
+    for name in names:
+        node = name.replace("-", "_")
+        if hass.services.has_service("esphome", f"{node}_dashboard_show"):
+            return node
+    return None
+
+
+def _restart_button(hass: HomeAssistant, device_id: str | None) -> str | None:
+    """The restart button of a device (Echo with TECHO5: "Restart")."""
+    if not device_id:
+        return None
+    return next((e.entity_id for e in er.async_entries_for_device(er.async_get(hass), device_id)
+                 if e.domain == "button" and (e.device_class or e.original_device_class) == "restart" and not e.disabled), None)
+
+
+async def async_reload_screen(hass: HomeAssistant, entry_id: str, screen_id: str, *, device: bool = False) -> None:
+    """Load the wall on a screen from scratch (a hung page or stream); device=True restarts the device itself."""
+    kind, _, target = screen_id.partition(":")
+    if kind == KIND_TECHO5 and device:
+        ent = er.async_get(hass).async_get(target)
+        if (button := _restart_button(hass, ent.device_id if ent else None)) is not None:
+            await hass.services.async_call("button", "press", {"entity_id": button}, blocking=True)
+            return
+    if kind == KIND_TECHO5:
+        node = _techo5_node(hass, target)
+        if node is not None:
+            # closing and opening the dashboard makes the Echo stream the page anew
+            await hass.services.async_call("esphome", f"{node}_dashboard_hide", {}, blocking=True)
+            await asyncio.sleep(3)
+            await hass.services.async_call("esphome", f"{node}_dashboard_show", {}, blocking=True)
+        await _techo5_show(hass, entry_id, target)
+    elif kind == KIND_BROWSER_MOD and hass.services.has_service("browser_mod", "refresh"):
+        dev = dr.async_get(hass).async_get(target)
+        browser_ids = [i[1] for i in dev.identifiers if i[0] == KIND_BROWSER_MOD] if dev else []
+        if browser_ids:
+            await hass.services.async_call("browser_mod", "refresh", {"browser_id": browser_ids}, blocking=True)
+    else:
+        # Cast and Fully Kiosk load the page again when it is sent again
+        await async_show(hass, entry_id, screen_id)
 
 
 def needs_restart(hass: HomeAssistant, screen_id: str) -> bool:

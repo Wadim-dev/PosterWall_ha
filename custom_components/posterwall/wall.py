@@ -58,6 +58,11 @@ class PosterWall:
         self.last_refresh: datetime | None = None
         self.error: str | None = None
         self.loading = False
+        # display pages that show this wall full screen: id -> last time they pinned a photo (or slept at night)
+        self.screens_alive: dict[str, datetime] = {}
+        self.reload_token = 0
+        self.started = dt_util.utcnow()
+        self.watchdog: Any = None
         self._unsubs: list[Callable[[], None]] = []
 
     # ------------------------------------------------------------ lifecycle
@@ -130,6 +135,26 @@ class PosterWall:
         if key == "album" and old != value:
             self.hass.async_create_task(self.async_refresh(), f"{DOMAIN} refresh")
 
+    @callback
+    def async_alive(self, client: str) -> None:
+        """A display page is fine: it pinned a photo (or sleeps at night)."""
+        now = dt_util.utcnow()
+        self.screens_alive[client] = now
+        for old in [c for c, t in self.screens_alive.items() if now - t > timedelta(hours=1)]:
+            del self.screens_alive[old]
+
+    def alive_count(self, within: timedelta) -> int:
+        """How many display pages were fine lately."""
+        now = dt_util.utcnow()
+        return sum(1 for t in self.screens_alive.values() if now - t <= within)
+
+    @callback
+    def async_reload_pages(self) -> None:
+        """Every display page of this wall loads again."""
+        self.reload_token += 1
+        self.screens_alive.clear()
+        self.async_notify()
+
     def album_options(self) -> list[tuple[str, str]]:
         """(key, title) of every album choice, "all" first."""
         lang = "de" if (self.hass.config.language or "en").startswith("de") else "en"
@@ -150,6 +175,7 @@ class PosterWall:
             "entry_id": self.entry.entry_id,
             "title": self.entry.title,
             "version": VERSION,
+            "reload": self.reload_token,
             "settings": dict(self.settings),
             "weather": o.get(CONF_WEATHER),
             "calendars": list(o.get(CONF_CALENDARS) or []),

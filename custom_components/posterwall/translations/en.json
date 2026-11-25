@@ -196,6 +196,9 @@
       }
     },
     "button": {
+      "reload_screens": {
+        "name": "Reload screens"
+      },
       "refresh": {
         "name": "Read photos again"
       }

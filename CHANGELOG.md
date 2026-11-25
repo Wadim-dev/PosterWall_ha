@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.3
+
+- **Screens never hang:** every display page reports while it pins photos. A kept Echo (TECHO5) or Fully Kiosk tablet whose screen is on and that stops reporting is brought back by itself, step by step: page loaded again, page opened anew (Echo: dashboard closed and opened), finally the Echo restarts.
+- **Reload screens:** button in the panel and button entity – loads the wall again on every screen at once (Echo: restart).
+
 ## 1.0.2
 
 - **Choose folder** on the PosterWall page: your real folder tree (Home Assistant media), any depth, with the number of photos in each folder. Sub folders are always included; a folder outside the wall's folder becomes its new folder.

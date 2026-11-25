@@ -29,7 +29,8 @@
       "last_read": {"default": "mdi:folder-refresh-outline"}
     },
     "button": {
-      "refresh": {"default": "mdi:folder-refresh"}
+      "refresh": {"default": "mdi:folder-refresh"},
+      "reload_screens": {"default": "mdi:monitor-arrow-down"}
     }
   },
   "services": {
