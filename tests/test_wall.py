@@ -250,3 +250,23 @@ async def test_card_and_panel_files(hass: HomeAssistant, loaded: MockConfigEntry
     for name in ("posterwall-card.js", "posterwall-panel.js"):
         resp = await http.get(f"/posterwall_static/{name}")
         assert resp.status == 200, name
+
+
+async def test_album_read_completely(hass: HomeAssistant, media_ready) -> None:
+    """A chosen folder is read on its own, so a big library never cuts it short."""
+    from custom_components.posterwall import sources
+
+    source = sources.MediaPhotoSource(hass, {"folder": FOLDER})
+    albums = await source.async_albums()
+    assert [a.title for a in albums] == ["2019", "2021", "Phone", "2021 / Summer"]
+    old = sources.MAX_PHOTOS
+    sources.MAX_PHOTOS = 1
+    try:
+        everything = await source.async_photos("all")
+        summer = await source.async_photos(f"{FOLDER}/2021/Summer")
+        year = await source.async_photos(f"{FOLDER}/2019")
+    finally:
+        sources.MAX_PHOTOS = old
+    assert len(everything) == 1
+    assert [p.date for p in summer] == ["2021-07-01"]
+    assert sorted(p.date for p in year) == ["2019", "2019-11-25"]

@@ -142,7 +142,6 @@ class MediaPhotoSource(PhotoSource):
         super().__init__(hass, data)
         self.root: str = data[CONF_FOLDER]
         self._albums: list[Album] = []
-        self._all: list[Photo] | None = None
 
     async def _browse(self, media_id: str | None) -> Any:
         try:
@@ -153,20 +152,24 @@ class MediaPhotoSource(PhotoSource):
     async def async_validate(self) -> None:
         await self._browse(self.root)
 
-    async def _crawl(self) -> list[Photo]:
-        """Read the folder and its sub folders (breadth first, limited)."""
-        photos: list[Photo] = []
+    async def _walk(self, start: str, *, photos: bool) -> tuple[list[Album], list[Photo]]:
+        """Read a folder breadth first (limited).
+
+        photos=False: only the folders down to two levels (the album list, quick).
+        photos=True: every photo below start, so a chosen album is always read completely.
+        """
+        found: list[Photo] = []
         albums: list[Album] = []
-        queue: list[tuple[str, tuple[str, ...], tuple[str, ...], str | None]] = [(self.root, (), (), None)]
+        queue: list[tuple[str, tuple[str, ...], str | None]] = [(start, (), None)]
         folders = 0
         first_error: SourceError | None = None
-        while queue and folders < MAX_FOLDERS and len(photos) < MAX_PHOTOS:
-            media_id, parents, titles, year = queue.pop(0)
+        while queue and folders < MAX_FOLDERS and len(found) < MAX_PHOTOS:
+            media_id, titles, year = queue.pop(0)
             folders += 1
             try:
                 item = await self._browse(media_id)
             except SourceError as err:
-                if media_id == self.root:
+                if media_id == start:
                     raise
                 first_error = first_error or err
                 continue
@@ -175,31 +178,34 @@ class MediaPhotoSource(PhotoSource):
                 if child.can_expand:
                     if SKIP_FOLDER.search(title):
                         continue
-                    depth = len(parents)
                     child_year = m.group(1) if (m := YEAR_FOLDER.match(title.strip())) else year
-                    if depth < 2:
-                        albums.append(Album(child.media_content_id, " / ".join((*titles, title))))
-                        queue.append((child.media_content_id, (*parents, child.media_content_id), (*titles, title), child_year))
-                    else:
-                        queue.append((child.media_content_id, parents, titles, child_year))
-                elif BROWSER_IMAGE.search(title) or (child.media_content_type or "").startswith("image/"):
-                    photos.append(Photo(child.media_content_id, date_from_name(title) or year, False, parents))
+                    if not photos:
+                        if len(titles) < 2:
+                            albums.append(Album(child.media_content_id, " / ".join((*titles, title))))
+                            if len(titles) < 1:
+                                queue.append((child.media_content_id, (*titles, title), child_year))
+                        continue
+                    queue.append((child.media_content_id, titles, child_year))
+                elif photos and (BROWSER_IMAGE.search(title) or (child.media_content_type or "").startswith("image/")):
+                    found.append(Photo(child.media_content_id, date_from_name(title) or year, False, ()))
         if first_error:
-            _LOGGER.debug("Some folders of %s could not be read: %s", self.root, first_error)
-        self._albums = albums
-        return photos
+            _LOGGER.debug("Some folders of %s could not be read: %s", start, first_error)
+        return albums, found
 
     async def async_albums(self) -> list[Album]:
-        # one crawl reads folders and photos; async_photos then only filters
-        self._all = await self._crawl()
-        return self._albums
+        albums, _ = await self._walk(self.root, photos=False)
+        self._albums = albums
+        return albums
 
     async def async_photos(self, album: str) -> list[Photo]:
-        if self._all is None:
-            self._all = await self._crawl()
-        if album in (ALBUM_ALL, ALBUM_FAVORITES, ""):
-            return self._all
-        return [p for p in self._all if album in p.albums]
+        start = self.root
+        if album not in (ALBUM_ALL, ALBUM_FAVORITES, "") and album.startswith(self.root):
+            start = album
+        year = m.group(1) if (m := YEAR_FOLDER.match(start.rstrip("/").rsplit("/", 1)[-1])) else None
+        _, photos = await self._walk(start, photos=True)
+        if year:
+            photos = [p if p.date else Photo(p.id, year, p.favorite, p.albums, p.extra) for p in photos]
+        return photos
 
     async def async_fetch(self, photo: Photo) -> tuple[bytes, str]:  # pragma: no cover - not proxied
         raise SourceError("media photos are resolved by Home Assistant")
@@ -480,6 +486,11 @@ def create_source(hass: HomeAssistant, data: dict[str, Any], otp: str | None = N
     return MediaPhotoSource(hass, data)
 
 
+def _name(photo_id: str) -> str:
+    """File name of a photo id (whole id for servers)."""
+    return photo_id.rsplit("/", 1)[-1].lower()
+
+
 def pick(photos: list[Photo], recent: Iterable[str], *, today: datetime, favorites: bool, on_this_day: bool,
          rnd: random.Random | None = None) -> tuple[Photo, int | None] | None:
     """Choose the next photo: favourites more often, "on this day" photos now and then, nothing shown just before.
@@ -489,12 +500,13 @@ def pick(photos: list[Photo], recent: Iterable[str], *, today: datetime, favorit
     if not photos:
         return None
     r = rnd or random
-    seen = set(recent)
+    # the same picture often sits in two folders (backup and sorted copy): never show the same file name twice
+    seen = {_name(i) for i in recent}
     if on_this_day and r.random() < 0.4:
         day = today.strftime("%m-%d")
         years = []
         for p in photos:
-            if p.date and len(p.date) == 10 and p.id not in seen and int(p.date[:4]) < today.year:
+            if p.date and len(p.date) == 10 and _name(p.id) not in seen and int(p.date[:4]) < today.year:
                 diff = abs((datetime(2000, int(p.date[5:7]), int(p.date[8:10])) - datetime(2000, today.month, today.day)).days)
                 if p.date[5:] == day or diff <= 3:
                     years.append(p)
@@ -502,11 +514,11 @@ def pick(photos: list[Photo], recent: Iterable[str], *, today: datetime, favorit
             p = r.choice(years)
             return p, today.year - int(p.date[:4])  # type: ignore[index]
     if favorites and r.random() < 0.35:
-        favs = [p for p in photos if p.favorite and p.id not in seen]
+        favs = [p for p in photos if p.favorite and _name(p.id) not in seen]
         if favs:
             return r.choice(favs), None
     for _ in range(12):
         p = r.choice(photos)
-        if p.id not in seen:
+        if _name(p.id) not in seen:
             return p, None
     return r.choice(photos), None

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1
+
+- Big photo libraries: a chosen album or folder is now read on its own, so it is complete even when the whole library has more than 50,000 photos. The album list is read much faster.
+- Display pages speak the language of Home Assistant, not the browser default of the screen (Cast devices and kiosk browsers often run in English).
+- The same picture in two folders (backup and sorted copy) is no longer shown twice at the same time.
+
 ## 1.0.0
 
 First release.
