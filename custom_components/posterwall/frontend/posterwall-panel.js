@@ -343,7 +343,8 @@ class PosterWallPanel extends HTMLElement {
   /* ---------- folders (Home Assistant media): click through the real folder tree ---------- */
   _folderRow(p) {
     const t = this._t, fb = this._fb, cur = p.albums.find((a) => a.key === p.settings.album);
-    const shown = p.settings.album === "all" ? (p.folder_title || t.allPhotos) : [p.folder_title, cur && cur.title].filter(Boolean).join(" / ");
+    const root = (this._walls.find((w) => w.entry_id === this._sel) || {}).folder_title;
+    const shown = p.settings.album === "all" ? (root || t.allPhotos) : [root, cur && cur.title].filter(Boolean).join(" / ");
     let html = `<div class="row"><div class="lab">${esc(t.folder)}<small class="path">${esc(shown)}</small></div>
       <button class="btn flat" data-fb-open><ha-icon icon="mdi:folder-open"></ha-icon>${esc(fb ? t.close : t.chooseFolder)}</button></div>`;
     if (!fb) return html;
@@ -366,7 +367,11 @@ class PosterWallPanel extends HTMLElement {
   }
   async _useFolder() {
     const d = this._fb && this._fb.data; if (!d) return;
-    try { await this._hass.callWS({ type: "posterwall/folder", entry_id: this._sel, folder: d.folder.id }); this._toast(this._t.folderSet); this._fb = null; }
+    const outside = !(d.folder.id === d.root || d.folder.id.startsWith(`${d.root.replace(/\/$/, "")}/`));
+    try {
+      await this._hass.callWS({ type: "posterwall/folder", entry_id: this._sel, folder: d.folder.id }); this._toast(this._t.folderSet); this._fb = null;
+      if (outside) setTimeout(() => this._loadWalls(), 3000); // the wall starts again with its new folder
+    }
     catch (e) { this._toast(e.message || e.code); }
     this._settings();
   }

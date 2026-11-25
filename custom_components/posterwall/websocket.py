@@ -62,6 +62,9 @@ def ws_walls(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, A
             data = {"entry_id": entry.entry_id, "title": entry.title, "error": entry.reason or entry.state.value}
         data["dashboard"] = dashboard_path(entry.entry_id)
         data["state"] = entry.state.value
+        if connection.user.is_admin:
+            # the panel (admins only) shows the wall's folder; display pages never see it
+            data["folder_title"] = entry.data.get(CONF_FOLDER_TITLE)
         walls.append(data)
     connection.send_result(msg["id"], walls)
 

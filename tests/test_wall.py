@@ -80,7 +80,7 @@ async def test_websocket(hass: HomeAssistant, loaded: MockConfigEntry, hass_ws_c
     await client.send_json_auto_id({"type": "posterwall/walls"})
     walls = (await client.receive_json())["result"]
     assert walls[0]["title"] == "Kitchen" and walls[0]["dashboard"].startswith("posterwall-") and walls[0]["photos"] == 6
-    assert "folder" not in str(walls)
+    assert "folder" not in walls[0] and walls[0]["folder_title"] == "Photos"  # the name for admins, never the source data
 
     await client.send_json_auto_id({"type": "posterwall/subscribe", "entry_id": loaded.entry_id})
     assert (await client.receive_json())["success"]
