@@ -29,7 +29,7 @@ class WallSwitch(SettingEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        return bool(self.value)
+        return bool(self.setting)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self.wall.async_set(self.key, True)

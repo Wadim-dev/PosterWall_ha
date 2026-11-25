@@ -4,7 +4,7 @@
    Robust on weak devices and streamed screens: one photo is loaded at a time (one in stock), every step has a time limit,
    a watchdog restarts a stalled wall, photos are decoded at most 720 px wide. */
 (() => {
-  const VERSION = "1.0.1";
+  const VERSION = "1.0.2";
   const T = {
     en: {
       loading: "Loading photos …", none: "No photos found in this folder or album.", pick: "Choose a wall in the card settings.",

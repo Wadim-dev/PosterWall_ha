@@ -15,3 +15,8 @@ known-third-party = ["homeassistant"]
 
 [tool.coverage.report]
 exclude_lines = ["pragma: no cover", "raise NotImplementedError", "if TYPE_CHECKING:"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["custom_components/posterwall"]

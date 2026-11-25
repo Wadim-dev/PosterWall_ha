@@ -1,7 +1,7 @@
 // PosterWall – sidebar panel: live preview, every setting of a wall and the screens of the house.
 // The display page of each wall (a dashboard "posterwall-<id>") is created here automatically and removed
 // again when its wall is deleted. No polling: the wall pushes every change over the websocket.
-const VERSION = "1.0.1";
+const VERSION = "1.0.2";
 const REPO = "https://github.com/Wadim-dev/PosterWall_ha";
 
 const TX = {
@@ -28,10 +28,13 @@ const TX = {
     linkHint: "Any other screen (a TV browser, an old tablet, a streamed Echo Show) simply opens this link.",
     noScreens: "No screen found yet.", installHint: "Screens appear here by themselves as soon as one of these integrations is set up:",
     castHttps: "Google Cast needs Home Assistant reachable over HTTPS (Home Assistant Cloud or an external URL with a certificate).",
-    kinds: { cast: "Google Cast", fully_kiosk: "Fully Kiosk", browser_mod: "Browser Mod" },
+    kinds: { cast: "Google Cast", fully_kiosk: "Fully Kiosk", browser_mod: "Browser Mod", techo5: "Echo Show · TECHO5" },
     sent: (n) => `Shown on ${n}`, failed: "Could not show:", empty: "No photos in this folder or album.",
     noWeather: "– none –", formats: "Screen format", wallSettings: "Wall settings", remove: "Delete or rename the wall",
     on: "On", off: "Off", notLoaded: "This wall could not start:", allPhotos: "All photos", favs: "Favourites", portrait: "Portrait · 9:16",
+    folder: "Folder", chooseFolder: "Choose folder", useFolder: "Show this folder", close: "Close", showingNow: "shown now",
+    inFolder: (p, f) => `${p.toLocaleString()} photos here · ${f} folders`, subAlways: "Photos in sub folders are always included.",
+    outside: "This folder is outside the wall's folder – it becomes the wall's new folder.", folderSet: "Folder is being read …",
   },
   de: {
     title: "PosterWall", add: "Neue Wand", welcome: "Deine Fotos an jedem Bildschirm",
@@ -56,14 +59,17 @@ const TX = {
     linkHint: "Jeder andere Bildschirm (Browser am Fernseher, altes Tablet, gestreamte Echo Show) öffnet einfach diesen Link.",
     noScreens: "Noch kein Bildschirm gefunden.", installHint: "Bildschirme erscheinen hier von selbst, sobald eine dieser Integrationen eingerichtet ist:",
     castHttps: "Google Cast braucht Home Assistant über HTTPS erreichbar (Home Assistant Cloud oder externe Adresse mit Zertifikat).",
-    kinds: { cast: "Google Cast", fully_kiosk: "Fully Kiosk", browser_mod: "Browser Mod" },
+    kinds: { cast: "Google Cast", fully_kiosk: "Fully Kiosk", browser_mod: "Browser Mod", techo5: "Echo Show · TECHO5" },
     sent: (n) => `Wird auf ${n} gezeigt`, failed: "Anzeigen ging nicht:", empty: "In diesem Ordner oder Album sind keine Fotos.",
     noWeather: "– keins –", formats: "Bildschirmformat", wallSettings: "Wand-Einstellungen", remove: "Wand löschen oder umbenennen",
     on: "An", off: "Aus", notLoaded: "Diese Wand konnte nicht starten:", allPhotos: "Alle Fotos", favs: "Favoriten", portrait: "Hochkant · 9:16",
+    folder: "Ordner", chooseFolder: "Ordner wählen", useFolder: "Diesen Ordner zeigen", close: "Schließen", showingNow: "wird gezeigt",
+    inFolder: (p, f) => `${p.toLocaleString("de-DE")} Fotos hier · ${f} Ordner`, subAlways: "Fotos in Unterordnern sind immer dabei.",
+    outside: "Dieser Ordner liegt außerhalb des Wand-Ordners – er wird der neue Ordner der Wand.", folderSet: "Ordner wird eingelesen …",
   },
 };
 const FORMATS = [["16:9", "TV · 16:9"], ["16:10", "Tablet · 16:10"], ["1024:600", "Nest Hub · 17:10"], ["4:3", "iPad · 4:3"], ["9:16", "portrait"]];
-const KIND_ICON = { cast: "mdi:cast", fully_kiosk: "mdi:tablet-dashboard", browser_mod: "mdi:web" };
+const KIND_ICON = { cast: "mdi:cast", fully_kiosk: "mdi:tablet-dashboard", browser_mod: "mdi:web", techo5: "mdi:tablet" };
 const INSTALL = [["cast", "https://www.home-assistant.io/integrations/cast/"], ["fully_kiosk", "https://www.home-assistant.io/integrations/fully_kiosk/"],
   ["browser_mod", "https://github.com/thomasloven/hass-browser_mod"]];
 const SWATCH = {
@@ -149,6 +155,21 @@ select,input[type=time],input[type=number]{font:inherit;font-size:14px;padding:8
 .logo{width:72px;height:72px;margin:0 auto 6px;display:block}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#323232;color:#fff;padding:12px 18px;border-radius:8px;z-index:9;font-size:14px;
   box-shadow:0 4px 14px rgba(0,0,0,.4);max-width:90vw}
+.fb{margin:6px 0 10px;border:1px solid var(--divider-color);border-radius:12px;overflow:hidden}
+.fb .crumbs{display:flex;flex-wrap:wrap;gap:2px;align-items:center;padding:8px 10px;background:rgba(127,127,127,.08);font-size:13px}
+.fb .crumbs button{font:inherit;border:0;background:none;color:var(--primary-color);cursor:pointer;padding:4px 6px;border-radius:6px}
+.fb .crumbs button:last-child{color:var(--primary-text-color);font-weight:500;cursor:default}
+.fb .crumbs span{color:var(--secondary-text-color)}
+.fb .list{max-height:320px;overflow:auto}
+.fb .list button{display:flex;align-items:center;gap:10px;width:100%;font:inherit;font-size:14px;text-align:left;padding:10px 12px;border:0;
+  border-top:1px solid var(--divider-color);background:none;color:var(--primary-text-color);cursor:pointer}
+.fb .list button:first-child{border-top:0}
+.fb .list button:hover{background:rgba(127,127,127,.08)}
+.fb .list ha-icon{color:var(--primary-color);--mdc-icon-size:20px;flex:none}
+.fb .list .on{margin-left:auto;font-size:12px;color:var(--primary-color)}
+.fb .foot2{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;border-top:1px solid var(--divider-color)}
+.fb .foot2 .muted{flex:1;min-width:160px}
+.path{font-size:13px;color:var(--secondary-text-color);overflow-wrap:anywhere}
 .foot{grid-column:1/-1;text-align:center;font-size:12px;color:var(--secondary-text-color);padding:8px 0 24px}
 .foot a{color:inherit}
 `;
@@ -208,7 +229,7 @@ class PosterWallPanel extends HTMLElement {
   _unsub() { if (this._sub) { this._sub.then((u) => u && u()).catch(() => {}); this._sub = null; } }
   _select(id, force) {
     if (id === this._sel && !force && this._p) return;
-    this._sel = id; this._p = null; this._unsub();
+    this._sel = id; this._p = null; this._fb = null; this._unsub();
     this._chips();
     if (id) { const u = new URL(location.href); u.searchParams.set("wall", id); history.replaceState(null, "", u); }
     this._layout();
@@ -287,7 +308,7 @@ class PosterWallPanel extends HTMLElement {
         <div class="row"><div class="lab">${esc(t.source)}<small>${esc(t.sources[p.source] || p.source)} · ${esc(status)}</small></div>
           <button class="btn flat" data-cfg>${esc(t.change)}</button></div>
         ${!p.loading && !p.error && !p.photos ? `<div class="note">${esc(t.empty)}</div>` : ""}
-        <div class="row"><div class="lab">${esc(t.album)}</div><select data-sel="album">${p.albums.map((a) => `<option value="${esc(a.key)}" ${a.key === s.album ? "selected" : ""}>${esc(a.key === "all" ? t.allPhotos : a.key === "favorites" ? t.favs : a.title)}</option>`).join("")}</select></div>
+        ${p.source === "media" ? this._folderRow(p) : `<div class="row"><div class="lab">${esc(t.album)}</div><select data-sel="album">${p.albums.map((a) => `<option value="${esc(a.key)}" ${a.key === s.album ? "selected" : ""}>${esc(a.key === "all" ? t.allPhotos : a.key === "favorites" ? t.favs : a.title)}</option>`).join("")}</select></div>`}
         ${this._range("interval", s.interval, 5, 120, 1, ` ${t.sec}`, t.interval)}
         ${this._range("count", s.count, 1, 12, 1, "", t.count)}
         <div class="row"><div class="lab">${esc(t.size)}</div>${this._seg("size", s.size, t.sizes)}</div>
@@ -319,7 +340,50 @@ class PosterWallPanel extends HTMLElement {
       </div>`;
     this._bind(box);
   }
+  /* ---------- folders (Home Assistant media): click through the real folder tree ---------- */
+  _folderRow(p) {
+    const t = this._t, fb = this._fb, cur = p.albums.find((a) => a.key === p.settings.album);
+    const root = (this._walls.find((w) => w.entry_id === this._sel) || {}).folder_title;
+    const shown = p.settings.album === "all" ? (root || t.allPhotos) : [root, cur && cur.title].filter(Boolean).join(" / ");
+    let html = `<div class="row"><div class="lab">${esc(t.folder)}<small class="path">${esc(shown)}</small></div>
+      <button class="btn flat" data-fb-open><ha-icon icon="mdi:folder-open"></ha-icon>${esc(fb ? t.close : t.chooseFolder)}</button></div>`;
+    if (!fb) return html;
+    if (!fb.data) return `${html}<div class="fb"><div class="crumbs"><span>${esc(fb.error || t.reading)}</span></div></div>`;
+    const d = fb.data, here = d.folder;
+    const inRoot = here.id === d.root || (here.id || "").startsWith(`${d.root.replace(/\/$/, "")}/`);
+    html += `<div class="fb"><div class="crumbs">${d.chain.map((c, i) => `${i ? "<span>›</span>" : ""}<button data-fb="${esc(c.id ?? "")}">${esc(c.title)}</button>`).join("")}</div>
+      <div class="list">${here.folders.map((f) => `<button data-fb="${esc(f.id)}"><ha-icon icon="mdi:folder"></ha-icon><span>${esc(f.title)}</span>${f.id === d.showing ? `<span class="on">${esc(t.showingNow)}</span>` : ""}</button>`).join("")}</div>
+      ${here.id ? `<div class="foot2"><span class="muted">${esc(t.inFolder(here.photos, here.folders.length))}. ${esc(inRoot ? t.subAlways : t.outside)}</span>
+        <button class="btn" data-fb-use ${here.id === d.showing ? "disabled" : ""}><ha-icon icon="mdi:check"></ha-icon>${esc(here.id === d.showing ? t.showingNow : t.useFolder)}</button></div>` : ""}
+      ${fb.error ? `<div class="note err">${esc(fb.error)}</div>` : ""}</div>`;
+    return html;
+  }
+  async _browse(folder) {
+    const fb = this._fb = this._fb || {};
+    const msg = { type: "posterwall/browse", entry_id: this._sel };
+    if (folder !== undefined) msg.folder = folder === "" ? null : folder;
+    try { fb.data = await this._hass.callWS(msg); fb.error = null; } catch (e) { fb.error = e.message || e.code; }
+    if (this._fb === fb) this._settings();
+  }
+  async _useFolder() {
+    const d = this._fb && this._fb.data; if (!d) return;
+    const outside = !(d.folder.id === d.root || d.folder.id.startsWith(`${d.root.replace(/\/$/, "")}/`));
+    try {
+      await this._hass.callWS({ type: "posterwall/folder", entry_id: this._sel, folder: d.folder.id }); this._toast(this._t.folderSet); this._fb = null;
+      if (outside) setTimeout(() => this._loadWalls(), 3000); // the wall starts again with its new folder
+    }
+    catch (e) { this._toast(e.message || e.code); }
+    this._settings();
+  }
   _bind(box) {
+    const fo = box.querySelector("[data-fb-open]");
+    if (fo) fo.addEventListener("click", () => { if (this._fb) { this._fb = null; this._settings(); } else { this._browse(); this._settings(); } });
+    box.querySelectorAll("[data-fb]").forEach((el) => el.addEventListener("click", () => {
+      if (this._fb && this._fb.data && el.dataset.fb === (this._fb.data.folder.id ?? "")) return;
+      this._browse(el.dataset.fb);
+    }));
+    const fu = box.querySelector("[data-fb-use]");
+    if (fu) fu.addEventListener("click", () => this._useFolder());
     box.querySelectorAll("[data-s]").forEach((el) => el.addEventListener("change", () => this._set(el.dataset.s, el.checked)));
     box.querySelectorAll("[data-seg]").forEach((el) => el.addEventListener("click", () => this._set(el.dataset.seg, el.dataset.v)));
     box.querySelectorAll("[data-sel]").forEach((el) => el.addEventListener("change", () => this._set(el.dataset.sel, el.value)));
@@ -366,6 +430,13 @@ class PosterWallPanel extends HTMLElement {
       }
     }
     const have = new Set(list.map((d) => d.url_path));
+    for (const d of list) {
+      // a renamed wall: its page follows (Echos with TECHO5 find the page by this title)
+      const w = want.get(d.url_path);
+      if (w && d.title !== `PosterWall ${w.title}`) {
+        try { await this._hass.callWS({ type: "lovelace/dashboards/update", dashboard_id: d.id, title: `PosterWall ${w.title}` }); } catch (e) { /* later */ }
+      }
+    }
     for (const [path, w] of want) {
       if (have.has(path)) continue;
       try {

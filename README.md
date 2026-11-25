@@ -19,7 +19,7 @@
 <p align="center">
   <a href="https://github.com/Wadim-dev/PosterWall_ha/releases"><img src="https://img.shields.io/github/v/release/Wadim-dev/PosterWall_ha?style=flat-square&color=ff7a45" alt="Release"></a>
   <a href="https://github.com/Wadim-dev/PosterWall_ha/actions/workflows/validate.yml"><img src="https://img.shields.io/github/actions/workflow/status/Wadim-dev/PosterWall_ha/validate.yml?branch=main&label=checks&style=flat-square" alt="Checks"></a>
-  <a href="custom_components/posterwall/quality_scale.yaml"><img src="https://img.shields.io/badge/quality%20scale-gold-d4a017?style=flat-square" alt="Quality scale: Gold"></a>
+  <a href="custom_components/posterwall/quality_scale.yaml"><img src="https://img.shields.io/badge/quality%20scale-platinum-e5e4e2?style=flat-square" alt="Quality scale: Platinum"></a>
   <img src="https://img.shields.io/badge/100%25-local-00a37a?style=flat-square" alt="100 % local">
   <img src="https://img.shields.io/badge/languages-EN%20%7C%20DE-blue?style=flat-square" alt="English and German">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Wadim-dev/PosterWall_ha?style=flat-square" alt="License"></a>
@@ -60,7 +60,7 @@
 Everything lives in one page in the sidebar (administrators only):
 
 - **Live preview** – the finished wall, always up to date, in the format of your screen (TV 16:9, tablet 16:10, Nest Hub, iPad 4:3, portrait).
-- **Photos** – album or sub folder, interval, how many photos hang on the wall, *favourites more often*, *on this day*.
+- **Photos** – the folder, interval, how many photos hang on the wall, *favourites more often*, *on this day*. With Home Assistant media, **Choose folder** opens your real folder tree right in the panel: tap through any depth, see how many photos lie in each folder, **Show this folder** – sub folders are always included. A folder outside the wall's folder simply becomes its new folder. With Immich and Synology Photos you pick the album or folder from a list.
 - **Look** – photo size, effect, background, date under the photo.
 - **Clock, weather, events** – each one on or off; weather and calendars come from the setup (*Configure* to change them).
 - **Night** – from/until, dimmed, clock only or screen dark.
@@ -68,6 +68,8 @@ Everything lives in one page in the sidebar (administrators only):
 - **Display page** – the link for any other screen, with *Copy* and *Open*.
 
 Several walls are possible (e.g. *Kitchen* from the family album, *Office* from holidays); each one has its own source and settings. *New wall* in the panel starts the setup again.
+
+*Reconfigure* (*Settings → Devices & services → PosterWall → ⋮*) changes the source or the folder of a wall – any kind of source; with Home Assistant media it starts in the folder the wall shows now. Settings, entities and screens stay.
 
 ## Effects and backgrounds
 
@@ -91,9 +93,9 @@ Several walls are possible (e.g. *Kitchen* from the family album, *Office* from 
 
 | Source | What you need | Albums | Favourites | Date of a photo |
 |---|---|---|---|---|
-| **Home Assistant media** | A folder in *Media* – the local media folder, a NAS share added under *Settings → System → Storage*, or another media source | Sub folders (two levels) | – | File name (`IMG_20240712_…`, `2024-07-12 …`) or year folder (`2024`) |
+| **Home Assistant media** | A folder in *Media* – the local media folder, a NAS share added under *Settings → System → Storage*, or another media source | Every sub folder, any depth (folder tree in the panel) | – | File name (`IMG_20240712_…`, `2024-07-12 …`) or year folder (`2024`) |
 | **Immich** | Address (e.g. `http://192.168.1.20:2283`) and an API key with *asset.read*, *asset.view*, *album.read*, *user.read* | Own and shared albums | ✅ | From Immich |
-| **Synology Photos** | Address of the DiskStation (e.g. `https://192.168.1.10:5001`), a user with access to Synology Photos | Personal space, shared space, albums | – | From Synology Photos |
+| **Synology Photos** | Address of the DiskStation (e.g. `https://192.168.1.10:5001`), a user with access to Synology Photos | Personal and shared space with their real folders (as in the *Photos* tab), albums | – | From Synology Photos |
 
 - **Two-factor sign-in (Synology):** if the user has 2FA, the setup asks once for the code; the DiskStation then trusts PosterWall. Tip: create a separate user with read access only.
 - **Passwords and keys** are stored in Home Assistant only and never sent to a screen; Immich and Synology photos go through Home Assistant as small previews with signed links that expire.
@@ -109,9 +111,12 @@ PosterWall finds screens by itself – nothing to type:
 | **Google Cast** (Nest Hub, Chromecast, Google TV, Cast-enabled TVs) | [Google Cast](https://www.home-assistant.io/integrations/cast/) | ✅ | ✅ started again when the screen is idle |
 | **Tablets with Fully Kiosk Browser** | [Fully Kiosk Browser](https://www.home-assistant.io/integrations/fully_kiosk/) | ✅ | ✅ set as start page |
 | **Any browser with Browser Mod** | [Browser Mod](https://github.com/thomasloven/hass-browser_mod) | ✅ | – |
-| **Everything else** (wall tablet, old phone, Echo with custom firmware, Raspberry Pi) | Open the *display page* link in a kiosk browser, signed in to Home Assistant | – | – |
+| **Echo Show with [TECHO5](https://github.com/HuskerMinion/techo5)** firmware | ESPHome – every Echo whose *Dashboard* can be *Streamed* | ✅ sets *Streamed*, the wall's page and *also when idle* | ✅ set back when another page was picked |
+| **Everything else** (wall tablet, old phone, Raspberry Pi) | Open the *display page* link in a kiosk browser, signed in to Home Assistant | – | – |
 
-**Show** starts the wall on that screen right away. **Always** keeps it there: Cast screens are checked every two minutes and started again when nothing else plays, Fully Kiosk gets the wall as start page.
+**Show** starts the wall on that screen right away. **Always** keeps it there: Cast screens are checked every two minutes and started again when nothing else plays, Fully Kiosk gets the wall as start page, Echos get the wall's page back.
+
+> **Echo Show with TECHO5.** One tap sets everything on the Echo – no settings to look for. The Echo streams the page from its dashboard server, so that server must be set up in TECHO5 once. A new wall's page appears in the Echo's list within about five minutes; until then **Show** says so.
 
 > **Google Cast needs HTTPS.** Cast devices only open Home Assistant over an `https://` address (Home Assistant Cloud, or your own domain with a certificate). The panel checks this and says so when it is missing.
 
@@ -198,6 +203,7 @@ No entity polls. The photo list is read once at start, every 6 hours and on the 
 - A wall reads up to 50,000 photos. For bigger libraries choose an album or folder: it is read on its own, with the same limit.
 - With Home Assistant media the date comes from the file name or a year folder; photos without either have no date and are not used for *on this day*.
 - Google Cast needs an `https://` address for Home Assistant.
+- Echo Show needs the TECHO5 firmware with its dashboard server (streaming); the Echo lists a new page within about five minutes.
 - If your dashboard resources are managed in YAML, add `/posterwall_static/posterwall-card.js` as module yourself.
 - Videos are skipped; HEIC files are shown only where the screen's browser supports them.
 
@@ -208,6 +214,7 @@ No entity polls. The photo list is read once at start, every 6 hours and on the 
 | *No photos found* | The PosterWall panel (card *Photos*) and the sensor *Photos* show the reason. For media folders check that the folder holds JPG/PNG/WEBP files. |
 | *Custom element doesn't exist: posterwall-card* | Open the PosterWall panel once (it adds the card to the dashboard resources) and reload the page. |
 | Cast screen stays black | The address must be `https://` and reachable from the screen. Test the *display page* link on your phone in the same Wi-Fi. |
+| Echo: *Can't reach the dashboard server* | The Echo streams through the dashboard server of TECHO5. Start that server (container) again; PosterWall itself is not involved. |
 | *Sign in again* repair | Immich key revoked or Synology password changed – tap it and enter the new one. |
 
 Diagnostics (*Settings → Devices & services → PosterWall → ⋮ → Download diagnostics*) never contain addresses, users, passwords or keys.
@@ -233,13 +240,15 @@ Diagnostics (*Settings → Devices & services → PosterWall → ⋮ → Downloa
 2. *Einstellungen → Geräte & Dienste → Integration hinzufügen → PosterWall*: Quelle wählen (**Home Assistant Medien**, **Immich** oder **Synology Photos**), Ordner oder Album aussuchen, Wand benennen (z. B. *Küche*), Wetter und Kalender wählen.
 3. **PosterWall** in der Seitenleiste öffnen: Die Vorschau zeigt die fertige Wand, unter *Bildschirme* stehen die Anzeigen im Haus – **Zeigen** antippen, fertig.
 
-**Einstellungen mit Live-Vorschau:** Album oder Unterordner, Takt, Anzahl der Fotos, Größe, Effekt (*Abfallen*, *Überblenden*, *Wegwehen*, *Umdrehen*, *Zufall*), Hintergrund (*Kork*, *Holz*, *Schiefer*, *Schwarz*), Datum unter dem Foto, Uhr, Wetter, Termine, *Favoriten öfter* (Immich) und *Heute vor X Jahren* (etwa jedes dritte Foto stammt vom heutigen Tag eines früheren Jahres). Die Vorschau lässt sich auf das Format deines Bildschirms stellen.
+**Einstellungen mit Live-Vorschau:** Ordner (bei Home Assistant Medien öffnet **Ordner wählen** deine echte Ordnerstruktur direkt im Panel – in jede Tiefe, mit Fotoanzahl je Ordner, Unterordner sind immer dabei; bei Immich und Synology Photos Album oder Ordner aus der Liste), Takt, Anzahl der Fotos, Größe, Effekt (*Abfallen*, *Überblenden*, *Wegwehen*, *Umdrehen*, *Zufall*), Hintergrund (*Kork*, *Holz*, *Schiefer*, *Schwarz*), Datum unter dem Foto, Uhr, Wetter, Termine, *Favoriten öfter* (Immich) und *Heute vor X Jahren* (etwa jedes dritte Foto stammt vom heutigen Tag eines früheren Jahres). Die Vorschau lässt sich auf das Format deines Bildschirms stellen.
 
 **Nacht:** Zwischen *Nacht ab* und *Nacht bis* wird die Wand gedimmt, zeigt nur die Uhr oder wird dunkel; bei *nur Uhr* und *dunkel* werden nachts keine Fotos geladen.
 
-**Bildschirme finden sich selbst:** Google Cast (Nest Hub, Chromecast, Fernseher), Tablets mit Fully Kiosk Browser und Browser mit Browser Mod erscheinen automatisch mit einem Knopf **Zeigen**. Der Schalter **Immer** hält die Wand dort: Cast-Geräte werden alle zwei Minuten geprüft und neu gestartet, wenn sonst nichts läuft, Fully Kiosk bekommt die Wand als Startseite. Google Cast braucht eine `https://`-Adresse für Home Assistant (Home Assistant Cloud oder eigene Domain); das Panel prüft das. Jeder andere Bildschirm öffnet einfach den Link der *Anzeigeseite* im Kiosk-Browser.
+**Bildschirme finden sich selbst:** Google Cast (Nest Hub, Chromecast, Fernseher), Tablets mit Fully Kiosk Browser, Browser mit Browser Mod und Echo Show mit TECHO5-Firmware erscheinen automatisch mit einem Knopf **Zeigen**. Der Schalter **Immer** hält die Wand dort: Cast-Geräte werden alle zwei Minuten geprüft und neu gestartet, wenn sonst nichts läuft, Fully Kiosk bekommt die Wand als Startseite, Echos bekommen die Seite zurück, wenn eine andere gewählt wurde. Beim Echo stellt ein Tipp alles ein (*Streamed*, die Seite der Wand, *auch im Leerlauf*); der Echo streamt über den Dashboard-Server von TECHO5, der einmal eingerichtet sein muss, und kennt eine neue Seite nach etwa fünf Minuten. Google Cast braucht eine `https://`-Adresse für Home Assistant (Home Assistant Cloud oder eigene Domain); das Panel prüft das. Jeder andere Bildschirm öffnet einfach den Link der *Anzeigeseite* im Kiosk-Browser.
 
-**Quellen:** Bei Home Assistant Medien zählt jeder Ordner unter *Medien*, auch NAS-Freigaben (*Einstellungen → System → Speicher*); das Datum kommt aus dem Dateinamen oder einem Jahresordner. Für Immich reicht ein API-Schlüssel mit *asset.read*, *asset.view*, *album.read* und *user.read*. Für Synology Photos am besten einen eigenen Benutzer nur mit Leserechten anlegen; bei Zwei-Faktor-Anmeldung fragt die Einrichtung einmal nach dem Code. Passwörter und Schlüssel bleiben in Home Assistant und gehen nie an einen Bildschirm.
+**Quellen:** Bei Home Assistant Medien zählt jeder Ordner unter *Medien*, auch NAS-Freigaben (*Einstellungen → System → Speicher*); das Datum kommt aus dem Dateinamen oder einem Jahresordner. Für Immich reicht ein API-Schlüssel mit *asset.read*, *asset.view*, *album.read* und *user.read*. Synology Photos zeigt persönlichen und geteilten Bereich mit ihren echten Ordnern (wie im Reiter *Fotos*) und die Alben. Für Synology Photos am besten einen eigenen Benutzer nur mit Leserechten anlegen; bei Zwei-Faktor-Anmeldung fragt die Einrichtung einmal nach dem Code. Passwörter und Schlüssel bleiben in Home Assistant und gehen nie an einen Bildschirm.
+
+*Neu konfigurieren* wechselt die Quelle oder den Ordner einer Wand; bei Home Assistant Medien beginnt es im aktuellen Ordner. Einstellungen, Entitäten und Bildschirme bleiben.
 
 Mehrere Wände sind möglich, jede mit eigener Quelle und eigenen Einstellungen; alle Einstellungen gibt es auch als Entitäten für Automationen und über die Aktion `posterwall.show`.
 

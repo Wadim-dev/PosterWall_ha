@@ -15,6 +15,7 @@ import logging
 import random
 import re
 from typing import Any
+from urllib.parse import unquote
 
 from aiohttp import ClientError, ClientResponse, ClientSession, ClientTimeout
 from homeassistant.components import media_source
@@ -119,6 +120,13 @@ class PhotoSource:
         """All photos of an album (or of everything)."""
         raise NotImplementedError
 
+    def in_root(self, album: str) -> bool:
+        """A folder below the wall's folder that is not in the album list (only media folders)."""
+        return False
+
+    def folder_title(self, album: str) -> str:
+        return album
+
     async def async_fetch(self, photo: Photo) -> tuple[bytes, str]:
         """Image bytes and content type of a proxied photo."""
         raise NotImplementedError
@@ -192,6 +200,12 @@ class MediaPhotoSource(PhotoSource):
             _LOGGER.debug("Some folders of %s could not be read: %s", start, first_error)
         return albums, found
 
+    def in_root(self, album: str) -> bool:
+        return album.startswith(f"{self.root.rstrip('/')}/")
+
+    def folder_title(self, album: str) -> str:
+        return " / ".join(unquote(p) for p in album[len(self.root.rstrip("/")) + 1:].split("/") if p)
+
     async def async_albums(self) -> list[Album]:
         albums, _ = await self._walk(self.root, photos=False)
         self._albums = albums
@@ -199,7 +213,7 @@ class MediaPhotoSource(PhotoSource):
 
     async def async_photos(self, album: str) -> list[Photo]:
         start = self.root
-        if album not in (ALBUM_ALL, ALBUM_FAVORITES, "") and album.startswith(self.root):
+        if album not in (ALBUM_ALL, ALBUM_FAVORITES, "") and (album == self.root or self.in_root(album)):
             start = album
         year = m.group(1) if (m := YEAR_FOLDER.match(start.rstrip("/").rsplit("/", 1)[-1])) else None
         _, photos = await self._walk(start, photos=True)
@@ -330,6 +344,8 @@ class SynologyPhotoSource(PhotoSource):
         self._device_token: str | None = data.get(CONF_DEVICE_TOKEN)
         self._lock = asyncio.Lock()
         self._passphrases: dict[str, str] = {}
+        # folder key ("f<id>" personal, "t<id>" shared space) -> (folder id, shared space, path)
+        self._folders: dict[str, tuple[int, bool, str]] = {}
 
     @property
     def device_token(self) -> str | None:
@@ -417,10 +433,48 @@ class SynologyPhotoSource(PhotoSource):
             if len(chunk) < 500:
                 break
             offset += 500
+        self._folders = {}
+        out = [Album(self.PERSONAL, "Personal space"), *await self._folder_tree(False)]
         if "SYNO.FotoTeam.Browse.Item" in self._apis:
-            albums.insert(0, Album(self.SHARED, "Shared space"))
-        albums.insert(0, Album(self.PERSONAL, "Personal space"))
-        return albums
+            out += [Album(self.SHARED, "Shared space"), *await self._folder_tree(True)]
+        return out + albums
+
+    async def _folder_tree(self, team: bool) -> list[Album]:
+        """The real folders of the personal (or shared) space, like in the Photos tab of Synology Photos."""
+        api = "SYNO.FotoTeam.Browse.Folder" if team else "SYNO.Foto.Browse.Folder"
+        if api not in self._apis:
+            return []
+        try:
+            root = int(((await self._call(api, "get", {})) or {})["folder"]["id"])
+        except (SourceError, KeyError, TypeError, ValueError) as err:
+            _LOGGER.debug("Synology Photos: folders of the %s space cannot be listed: %s", "shared" if team else "personal", err)
+            return []
+        space = "Shared space" if team else "Personal space"
+        found: list[Album] = []
+        queue = [root]
+        while queue and len(self._folders) < MAX_FOLDERS:
+            parent = queue.pop(0)
+            offset = 0
+            while True:
+                try:
+                    data = await self._call(api, "list", {"id": parent, "offset": offset, "limit": 500})
+                except SourceError as err:
+                    _LOGGER.debug("Synology Photos: folder %s cannot be listed: %s", parent, err)
+                    break
+                chunk = (data or {}).get("list") or []
+                for f in chunk:
+                    path = str(f.get("name") or f["id"]).strip("/")
+                    if not path or SKIP_FOLDER.search(path.rsplit("/", 1)[-1]):
+                        continue
+                    key = f"{'t' if team else 'f'}{f['id']}"
+                    self._folders[key] = (int(f["id"]), team, path)
+                    found.append(Album(key, " / ".join((space, *path.split("/")))))
+                    queue.append(int(f["id"]))
+                if len(chunk) < 500:
+                    break
+                offset += 500
+        found.sort(key=lambda a: a.title.lower())
+        return found
 
     @staticmethod
     def _photo(item: dict[str, Any], team: bool, passphrase: str | None) -> Photo | None:
@@ -455,6 +509,18 @@ class SynologyPhotoSource(PhotoSource):
         await self._ensure()
         if album == self.SHARED:
             return await self._items("SYNO.FotoTeam.Browse.Item", {}, True, None)
+        if album[:1] in ("f", "t") and album[1:].isdigit():
+            if not self._folders:
+                await self.async_albums()
+            if album in self._folders:
+                # the folder and every folder below it
+                _, team, path = self._folders[album]
+                api = "SYNO.FotoTeam.Browse.Item" if team else "SYNO.Foto.Browse.Item"
+                photos: list[Photo] = []
+                for fid, t, p in self._folders.values():
+                    if t == team and (p == path or p.startswith(f"{path}/")) and len(photos) < MAX_PHOTOS:
+                        photos += await self._items(api, {"folder_id": fid}, team, None)
+                return photos
         if album.startswith("a"):
             if not self._passphrases:
                 await self.async_albums()
@@ -521,4 +587,6 @@ def pick(photos: list[Photo], recent: Iterable[str], *, today: datetime, favorit
         p = r.choice(photos)
         if _name(p.id) not in seen:
             return p, None
-    return r.choice(photos), None
+    # many photos were shown just before: choose among the others (only all shown → any)
+    fresh = [p for p in photos if _name(p.id) not in seen]
+    return r.choice(fresh or photos), None

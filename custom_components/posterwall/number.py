@@ -9,6 +9,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import PosterWallConfigEntry
 from .entity import SettingEntity
+from .wall import PosterWall
 
 PARALLEL_UPDATES = 0
 
@@ -28,7 +29,7 @@ class WallNumber(SettingEntity, NumberEntity):
 
     _attr_entity_category = EntityCategory.CONFIG
 
-    def __init__(self, wall, key: str) -> None:
+    def __init__(self, wall: PosterWall, key: str) -> None:
         super().__init__(wall, key)
         lo, hi, step, unit, mode = NUMBERS[key]
         self._attr_native_min_value, self._attr_native_max_value, self._attr_native_step = lo, hi, step
@@ -37,7 +38,8 @@ class WallNumber(SettingEntity, NumberEntity):
 
     @property
     def native_value(self) -> float:
-        return float(self.value)
+        value: float = self.setting  # whole numbers stay whole ("15", not "15.0")
+        return value
 
     async def async_set_native_value(self, value: float) -> None:
         await self.wall.async_set(self.key, int(value))

@@ -6,7 +6,7 @@ from http import HTTPStatus
 import logging
 
 from aiohttp import web
-from homeassistant.components.http import KEY_HASS, HomeAssistantView
+from homeassistant.helpers.http import KEY_HASS, HomeAssistantView
 
 from .const import DOMAIN
 from .sources import SourceError

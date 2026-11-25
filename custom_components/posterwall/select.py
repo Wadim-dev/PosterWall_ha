@@ -10,6 +10,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import PosterWallConfigEntry
 from .const import BACKGROUNDS, EFFECTS, NIGHT_MODES, SIZES
 from .entity import SettingEntity
+from .wall import PosterWall
 
 PARALLEL_UPDATES = 0
 
@@ -26,13 +27,13 @@ class ChoiceSelect(SettingEntity, SelectEntity):
 
     _attr_entity_category = EntityCategory.CONFIG
 
-    def __init__(self, wall, key: str) -> None:
+    def __init__(self, wall: PosterWall, key: str) -> None:
         super().__init__(wall, key)
         self._attr_options = list(CHOICES[key])
 
     @property
     def current_option(self) -> str:
-        return str(self.value)
+        return str(self.setting)
 
     async def async_select_option(self, option: str) -> None:
         await self.wall.async_set(self.key, option)
@@ -57,7 +58,7 @@ class AlbumSelect(SettingEntity, SelectEntity):
     @property
     def current_option(self) -> str | None:
         for title, key in self._titles().items():
-            if key == self.value:
+            if key == self.setting:
                 return title
         return None
 

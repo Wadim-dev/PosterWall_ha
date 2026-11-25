@@ -68,6 +68,15 @@
       "reauth_confirm": {
         "title": "Sign in again",
         "description": "{url} does not accept the stored sign-in anymore. Enter it again."
+      },
+      "reconfigure": {
+        "title": "Where are the photos now?",
+        "description": "Keep the same kind of source or switch to another one. Settings, entities and screens of the wall stay.",
+        "menu_options": {
+          "media": "Home Assistant media (folder, NAS share, any media source)",
+          "immich": "Immich server",
+          "synology": "Synology Photos on a DiskStation"
+        }
       }
     },
     "error": {
@@ -218,6 +227,9 @@
     },
     "unknown_wall": {
       "message": "This wall is not known."
+    },
+    "echo_not_ready": {
+      "message": "The Echo does not list the page “{page}” yet. It reads its list of dashboards every few minutes – try again in 5 minutes."
     }
   }
 }

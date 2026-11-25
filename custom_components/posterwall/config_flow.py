@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from homeassistant.components import media_source
 from homeassistant.config_entries import SOURCE_REAUTH, SOURCE_RECONFIGURE, ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
@@ -26,6 +25,7 @@ from homeassistant.helpers.selector import (
 )
 import voluptuous as vol
 
+from .browse import async_chain, async_open
 from .const import (
     CONF_API_KEY,
     CONF_CALENDARS,
@@ -47,13 +47,11 @@ from .const import (
     SOURCE_MEDIA,
     SOURCE_SYNOLOGY,
 )
-from .sources import BROWSER_IMAGE, SKIP_FOLDER, AuthError, OtpRequired, SourceError, create_source
+from .sources import AuthError, OtpRequired, SourceError, create_source
 
 USE = "__use__"
 UP = "__up__"
 OTP = "otp"
-# media sources that never hold photos
-NO_PHOTOS = {"camera", "radio_browser", "tts", "music_assistant", "ai_task"}
 
 
 def _url(value: str) -> str:
@@ -69,7 +67,8 @@ def _display_schema(hass: Any, defaults: Mapping[str, Any], name: str | None = N
     if name is not None:
         fields[vol.Required("name", default=name)] = TextSelector()
     w = defaults.get(CONF_WEATHER, weather)
-    fields[vol.Optional(CONF_WEATHER, **({"description": {"suggested_value": w}} if w else {}))] = EntitySelector(
+    weather_key = vol.Optional(CONF_WEATHER, description={"suggested_value": w}) if w else vol.Optional(CONF_WEATHER)
+    fields[weather_key] = EntitySelector(
         EntitySelectorConfig(domain="weather"))
     fields[vol.Optional(CONF_CALENDARS, default=list(defaults.get(CONF_CALENDARS) or []))] = EntitySelector(
         EntitySelectorConfig(domain="calendar", multiple=True))
@@ -110,15 +109,24 @@ class PosterWallConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_menu(step_id="user", menu_options=["media", "immich", "synology"])
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Change where the photos come from: same kind first, any other kind possible."""
         entry = self._get_reconfigure_entry()
         self._data = dict(entry.data)
         kind = entry.data.get(CONF_SOURCE, SOURCE_MEDIA)
-        return await getattr(self, f"async_step_{kind}")()
+        if kind == SOURCE_MEDIA and entry.data.get(CONF_FOLDER):
+            # start in the folder the wall shows now, with the way up to every parent
+            self._path = await async_chain(self.hass, entry.data[CONF_FOLDER])
+        order = [kind, *(k for k in (SOURCE_MEDIA, SOURCE_IMMICH, SOURCE_SYNOLOGY) if k != kind)]
+        return self.async_show_menu(step_id="reconfigure", menu_options=order)
+
+    def _same(self, kind: str) -> dict[str, Any]:
+        """The data of the source so far – nothing of another kind of source (no old passwords)."""
+        return self._data if self._data.get(CONF_SOURCE, kind) == kind else {}
 
     # ------------------------------------------------------------ HA media
 
     async def async_step_media(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        self._data = {**self._data, CONF_SOURCE: SOURCE_MEDIA}
+        self._data = {**self._same(SOURCE_MEDIA), CONF_SOURCE: SOURCE_MEDIA}
         return await self.async_step_folder()
 
     async def async_step_folder(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -141,17 +149,14 @@ class PosterWallConfigFlow(ConfigFlow, domain=DOMAIN):
                 title = next((t for i, t in self._children if i == choice), choice)
                 self._path.append((choice, title))
         try:
-            item = await media_source.async_browse_media(self.hass, self._path[-1][0])
-        except (HomeAssistantError, ValueError):
+            opened = await async_open(self.hass, self._path[-1][0])
+        except HomeAssistantError:
             if len(self._path) > 1:
                 self._path.pop()
             errors["base"] = "browse_failed"
-            item = await media_source.async_browse_media(self.hass, self._path[-1][0])
-        children = item.children or []
-        self._children = [(c.media_content_id, c.title) for c in children if c.can_expand and not SKIP_FOLDER.search(c.title or "")
-                          and c.media_content_id.split("/")[2] not in NO_PHOTOS]
-        here = sum(1 for c in children if not c.can_expand and (BROWSER_IMAGE.search(c.title or "")
-                                                                  or (c.media_content_type or "").startswith("image/")))
+            opened = await async_open(self.hass, self._path[-1][0])
+        self._children = opened.folders
+        here = opened.photos
         options: list[SelectOptionDict] = []
         if self._path[-1][0] is not None:
             options.append(SelectOptionDict(value=USE, label=f"✓ {self._path[-1][1]}"))
@@ -172,13 +177,13 @@ class PosterWallConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_immich(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            data = {**self._data, CONF_SOURCE: SOURCE_IMMICH, CONF_URL: _url(user_input[CONF_URL]),
+            data = {**self._same(SOURCE_IMMICH), CONF_SOURCE: SOURCE_IMMICH, CONF_URL: _url(user_input[CONF_URL]),
                     CONF_API_KEY: user_input[CONF_API_KEY].strip(), CONF_VERIFY_SSL: user_input[CONF_VERIFY_SSL]}
             errors = await self._test(data)
             if not errors:
                 self._data = data
                 return await self._finish_source()
-        d = user_input or self._data
+        d = user_input or self._same(SOURCE_IMMICH)
         return self.async_show_form(
             step_id="immich",
             data_schema=vol.Schema({
@@ -195,7 +200,7 @@ class PosterWallConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_synology(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            data = {**self._data, CONF_SOURCE: SOURCE_SYNOLOGY, CONF_URL: _url(user_input[CONF_URL]),
+            data = {**self._same(SOURCE_SYNOLOGY), CONF_SOURCE: SOURCE_SYNOLOGY, CONF_URL: _url(user_input[CONF_URL]),
                     CONF_USERNAME: user_input[CONF_USERNAME].strip(), CONF_PASSWORD: user_input[CONF_PASSWORD],
                     CONF_VERIFY_SSL: user_input[CONF_VERIFY_SSL]}
             data.pop(CONF_DEVICE_TOKEN, None)
@@ -205,7 +210,7 @@ class PosterWallConfigFlow(ConfigFlow, domain=DOMAIN):
                 return await self.async_step_otp()
             if not errors:
                 return await self._finish_source()
-        d = user_input or self._data
+        d = user_input or self._same(SOURCE_SYNOLOGY)
         return self.async_show_form(
             step_id="synology",
             data_schema=vol.Schema({

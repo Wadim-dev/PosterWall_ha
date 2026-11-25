@@ -68,6 +68,15 @@
       "reauth_confirm": {
         "title": "Neu anmelden",
         "description": "{url} nimmt die gespeicherte Anmeldung nicht mehr an. Bitte neu eingeben."
+      },
+      "reconfigure": {
+        "title": "Woher kommen die Fotos jetzt?",
+        "description": "Bleib bei derselben Quelle oder wechsle zu einer anderen. Einstellungen, Entitäten und Bildschirme der Wand bleiben.",
+        "menu_options": {
+          "media": "Home-Assistant-Medien (Ordner, NAS-Freigabe, jede Medienquelle)",
+          "immich": "Immich-Server",
+          "synology": "Synology Photos auf einer DiskStation"
+        }
       }
     },
     "error": {
@@ -218,6 +227,9 @@
     },
     "unknown_wall": {
       "message": "Diese Wand ist unbekannt."
+    },
+    "echo_not_ready": {
+      "message": "Der Echo kennt die Seite „{page}“ noch nicht. Er liest seine Dashboard-Liste alle paar Minuten neu – versuch es in 5 Minuten noch einmal."
     }
   }
 }

@@ -10,7 +10,7 @@ from typing import Any
 
 from homeassistant.components import media_source
 from homeassistant.components.http.auth import async_sign_path
-from homeassistant.components.media_player import async_process_play_media_url
+from homeassistant.components.media_player.browse_media import async_process_play_media_url
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -87,9 +87,16 @@ class PosterWall:
             self.albums = await self.source.async_albums()
             album = self.settings["album"]
             keys = {a.key for a in self.albums} | {ALBUM_ALL} | ({ALBUM_FAVORITES} if self.source.has_favorites else set())
-            if album not in keys:
+            if album not in keys and not self.source.in_root(album):
                 album = self.settings["album"] = ALBUM_ALL
-            photos = await self.source.async_photos(album)
+            try:
+                photos = await self.source.async_photos(album)
+            except SourceError:
+                if album == ALBUM_ALL or album in keys:
+                    raise
+                # a deeper folder that is gone: show everything again
+                album = self.settings["album"] = ALBUM_ALL
+                photos = await self.source.async_photos(album)
         except SourceError as err:
             if self.error is None:
                 _LOGGER.warning("PosterWall %s: photos could not be read: %s", self.entry.title, err)
@@ -130,6 +137,10 @@ class PosterWall:
         if self.source.has_favorites:
             opts.append((ALBUM_FAVORITES, FAV_TITLE[lang]))
         opts += [(a.key, a.title) for a in self.albums]
+        album = self.settings["album"]
+        if all(k != album for k, _ in opts) and self.source.in_root(album):
+            # a deeper folder picked on the PosterWall page
+            opts.append((album, self.source.folder_title(album)))
         return opts
 
     def payload(self) -> dict[str, Any]:
