@@ -139,13 +139,34 @@ async def test_options(hass: HomeAssistant, loaded: MockConfigEntry) -> None:
 
 async def test_reconfigure_media(hass: HomeAssistant, loaded: MockConfigEntry) -> None:
     result = await loaded.start_reconfigure_flow(hass)
+    # the source can be changed; the kind the wall has now comes first
+    assert result["type"] is FlowResultType.MENU
+    assert result["menu_options"] == ["media", "immich", "synology"]
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "media"})
+    # it starts in the folder the wall shows now, with the way up
     assert result["step_id"] == "folder"
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"folder": FOLDER})
+    values = [o["value"] for o in result["data_schema"].schema["folder"].config["options"]]
+    assert values[:2] == ["__use__", "__up__"]
+    assert f"{FOLDER}/2021" in values
+    assert result["description_placeholders"]["path"].endswith("Photos")
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"folder": f"{FOLDER}/2021"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"folder": "__use__"})
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
     assert loaded.data["folder"] == f"{FOLDER}/2021"
+
+
+async def test_reconfigure_to_immich(hass: HomeAssistant, loaded: MockConfigEntry, aioclient_mock: AiohttpClientMocker) -> None:
+    result = await loaded.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "immich"})
+    assert result["step_id"] == "immich"
+    aioclient_mock.get(f"{IMMICH}/api/users/me", json={"id": "u"})
+    aioclient_mock.post(f"{IMMICH}/api/search/metadata", json={"assets": {"items": [], "nextPage": None}})
+    aioclient_mock.get(f"{IMMICH}/api/albums", json=[])
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"url": IMMICH, "api_key": "k", "verify_ssl": True})
+    assert result["reason"] == "reconfigure_successful"
+    # nothing of the old media source is left
+    assert loaded.data == {"source": "immich", "url": IMMICH, "api_key": "k", "verify_ssl": True}
 
 
 async def test_reauth_immich(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:

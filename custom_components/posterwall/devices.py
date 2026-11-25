@@ -4,6 +4,8 @@ Only public actions of the other integrations are used:
 - Google Cast (Nest Hub, Chromecast, Google TV, Cast TVs): cast.show_lovelace_view
 - Fully Kiosk Browser: fully_kiosk.load_url (and set_config startURL to keep it)
 - Browser Mod: browser_mod.navigate
+- Echo Show with the TECHO5 firmware (ESPHome): its own selects "Dashboard" = Streamed and
+  "Dashboard to show" = the wall's display page (the Echo streams it from its dashboard server)
 """
 
 from __future__ import annotations
@@ -27,6 +29,11 @@ VIEW_PATH = "wall"
 KIND_CAST = "cast"
 KIND_FULLY = "fully_kiosk"
 KIND_BROWSER_MOD = "browser_mod"
+KIND_TECHO5 = "techo5"
+TECHO5_SHOW = "_dashboard_to_show"
+TECHO5_MODE = "_dashboard"
+TECHO5_IDLE = "_dashboard_when_idle"
+STREAMED = "Streamed"
 
 
 @dataclass(slots=True)
@@ -47,6 +54,11 @@ class Screen:
 def dashboard_path(entry_id: str) -> str:
     """URL path of the dashboard that shows a wall (created by the PosterWall panel)."""
     return f"posterwall-{entry_id[:8].lower()}"
+
+
+def dashboard_title(title: str) -> str:
+    """Title of the display page; TECHO5 Echos list pages by this title."""
+    return f"PosterWall {title}"
 
 
 def cast_ready(hass: HomeAssistant) -> bool:
@@ -85,6 +97,19 @@ def find_screens(hass: HomeAssistant) -> list[Screen]:
                 continue
             screens.append(Screen(f"{kind}:{dev.id}", kind, dev.name_by_user or dev.name or dev.id, None,
                                   area_name(dev.area_id), dev.model))
+    if "esphome" in hass.config.components:
+        for ent in ent_reg.entities.values():
+            if ent.platform != "esphome" or ent.domain != "select" or ent.disabled or not ent.entity_id.endswith(TECHO5_SHOW):
+                continue
+            mode = hass.states.get(ent.entity_id.removesuffix(TECHO5_SHOW) + TECHO5_MODE)
+            if mode is None or STREAMED not in (mode.attributes.get("options") or []):
+                continue
+            dev = dev_reg.async_get(ent.device_id) if ent.device_id else None
+            name = (dev.name_by_user or dev.name) if dev else None
+            state = hass.states.get(ent.entity_id)
+            screens.append(Screen(f"{KIND_TECHO5}:{ent.entity_id}", KIND_TECHO5, name or ent.entity_id,
+                                  state.state if state else None, area_name(ent.area_id or (dev.area_id if dev else None)),
+                                  dev.model if dev else None))
     screens.sort(key=lambda s: (s.area or "~", s.name.lower()))
     return screens
 
@@ -112,6 +137,8 @@ async def async_show(hass: HomeAssistant, entry_id: str, screen_id: str, *, keep
             await hass.services.async_call("fully_kiosk", "set_config", {"device_id": target, "key": "startURL", "value": url},
                                            blocking=True)
         await hass.services.async_call("fully_kiosk", "load_url", {"device_id": target, "url": url}, blocking=True)
+    elif kind == KIND_TECHO5:
+        await _techo5_show(hass, entry_id, target)
     elif kind == KIND_BROWSER_MOD:
         dev = dr.async_get(hass).async_get(target)
         browser_ids = [i[1] for i in dev.identifiers if i[0] == KIND_BROWSER_MOD] if dev else []
@@ -123,13 +150,50 @@ async def async_show(hass: HomeAssistant, entry_id: str, screen_id: str, *, keep
         raise ServiceValidationError("Unknown screen", translation_domain=DOMAIN, translation_key="unknown_screen")
 
 
+async def _techo5_show(hass: HomeAssistant, entry_id: str, show_select: str) -> None:
+    """Echo Show with TECHO5: stream the wall's display page, also when the Echo is idle."""
+    entry = hass.config_entries.async_get_entry(entry_id)
+    state = hass.states.get(show_select)
+    if entry is None or state is None:
+        raise ServiceValidationError("Unknown screen", translation_domain=DOMAIN, translation_key="unknown_screen")
+    option = dashboard_title(entry.title)
+    if option not in (state.attributes.get("options") or []):
+        # the Echo reads the list of dashboards again every few minutes
+        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="echo_not_ready",
+                                 translation_placeholders={"page": option})
+    base = show_select.removesuffix(TECHO5_SHOW)
+    mode = hass.states.get(base + TECHO5_MODE)
+    if mode is not None and mode.state != STREAMED:
+        await hass.services.async_call("select", "select_option", {"entity_id": base + TECHO5_MODE, "option": STREAMED},
+                                       blocking=True)
+    if state.state != option:
+        await hass.services.async_call("select", "select_option", {"entity_id": show_select, "option": option}, blocking=True)
+    idle = hass.states.get(f"switch.{base.split('.', 1)[1]}{TECHO5_IDLE}")
+    if idle is not None and idle.state == STATE_OFF:
+        await hass.services.async_call("switch", "turn_on", {"entity_id": idle.entity_id}, blocking=True)
+
+
 def needs_restart(hass: HomeAssistant, screen_id: str) -> bool:
-    """A kept Cast screen shows nothing anymore (never interrupts music or a video)."""
+    """A kept screen shows something else (Cast: only when it is free – never interrupts music or a video)."""
     kind, _, target = screen_id.partition(":")
+    if kind == KIND_TECHO5:
+        state = hass.states.get(target)
+        mode = hass.states.get(target.removesuffix(TECHO5_SHOW) + TECHO5_MODE)
+        entry_title = _kept_title(hass, screen_id)
+        return bool(state and entry_title and (state.state != dashboard_title(entry_title)
+                                               or (mode is not None and mode.state != STREAMED))
+                    and dashboard_title(entry_title) in (state.attributes.get("options") or []))
     if kind != KIND_CAST:
         return False
     state = hass.states.get(target)
     return state is not None and state.state in (STATE_OFF, STATE_IDLE)
+
+
+def _kept_title(hass: HomeAssistant, screen_id: str) -> str | None:
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if (entry.options.get(CONF_DEVICES) or {}).get(screen_id, {}).get("keep"):
+            return entry.title
+    return None
 
 
 @callback

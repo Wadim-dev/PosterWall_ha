@@ -26,7 +26,7 @@ class WallTime(SettingEntity, TimeEntity):
 
     @property
     def native_value(self) -> time:
-        return time.fromisoformat(str(self.value))
+        return time.fromisoformat(str(self.setting))
 
     async def async_set_value(self, value: time) -> None:
         await self.wall.async_set(self.key, value.strftime("%H:%M:%S"))
