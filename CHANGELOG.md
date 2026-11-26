@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.7
+
+- **No endless restarts:** a kept Echo is restarted itself at most once in six hours, and a screen only counts as fixed after an hour without a break. A screen that keeps breaking down (for example because the TECHO5 dashboard server runs out of memory) is left alone after two rounds and a repair says why. Before, a screen that ran again for a few minutes started the count afresh, so Echos could be restarted every half hour all day.
+- **New effect "None":** the new photo is simply there, without animation. Lightest for weak devices and streamed screens: an Echo with TECHO5 gets one new picture per change instead of many per second during an animation (measured: 7 instead of 141 pictures in 30 seconds).
+- Lighter animations: no permanent compositing layers, and a leaving photo is removed only after its way out has ended (Fade took longer than the photo stayed).
+- Diagnostics show what every display page holds (memory, photos, elements, minutes running) and the watchdog's rounds, to find a screen that grows.
+
 ## 1.0.6
 
 - Updates reach the screens by themselves: at start PosterWall points the card resource to the new version. Before, it was only changed when an admin opened the PosterWall page, so screens that loaded again after an update still got the old card.

@@ -4,7 +4,7 @@
    Robust on weak devices and streamed screens: one photo is loaded at a time (one in stock), every step has a time limit,
    a watchdog restarts a stalled wall, photos are decoded at most 720 px wide. */
 (() => {
-  const VERSION = "1.0.6";
+  const VERSION = "1.0.7";
   const T = {
     en: {
       loading: "Loading photos …", none: "No photos found in this folder or album.", pick: "Choose a wall in the card settings.",
@@ -335,7 +335,15 @@
     _alive() {
       // a full-screen page tells the integration it runs fine; when it stops, the integration loads it again
       if (!this._c.fullscreen || this._c.preview || !this._hass) return;
-      this._hass.callWS({ type: "posterwall/alive", entry_id: this._c.wall, client: this._client() }).catch(() => {});
+      const msg = { type: "posterwall/alive", entry_id: this._c.wall, client: this._client() };
+      try {
+        // what the page holds, shown in the diagnostics: finds a page that grows
+        if (performance.memory) msg.heap = Math.round(performance.memory.usedJSHeapSize / 1048576);
+        msg.canvases = this._root.querySelectorAll("canvas").length + this._stock.length;
+        msg.nodes = document.getElementsByTagName("*").length;
+        msg.up = Math.round((Date.now() - this._since) / 60000);
+      } catch (e) { /* only for diagnostics */ }
+      this._hass.callWS(msg).catch(() => {});
     }
     _client() { if (!this._cid) this._cid = Math.random().toString(36).slice(2, 12); return this._cid; }
     _guard() {
@@ -409,13 +417,16 @@
       this._photos.appendChild(el);
       this._last = this._lastPin = Date.now(); this._soft = 0;
       this._message("");
-      requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add("in")));
+      if (fx === "none") el.classList.add("in"); // no effect: there at once, a single new picture for a streamed screen
+      else requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add("in")));
     }
     _leave(el) {
+      const gone = () => { free(el.querySelector("canvas")); el.remove(); };
+      if (el.dataset.fx === "none") { gone(); return; }
       el.style.setProperty("--fr", `${rand(6, 14) * (Math.random() < 0.5 ? -1 : 1)}deg`);
       el.style.setProperty("--dx", `${(Math.random() < 0.5 ? -1 : 1) * rand(45, 70)}vw`);
       el.classList.add("out");
-      setTimeout(() => { free(el.querySelector("canvas")); el.remove(); }, 1100);
+      setTimeout(gone, 1600); // after the longest way out (fade: 1.4 s)
     }
   }
 
@@ -447,11 +458,12 @@
   .night { position:absolute; inset:0; background:#000; opacity:0; pointer-events:none; z-index:100001; transition:opacity 2s; }
   .wall:not([data-night="dim"]) .night { opacity:0 !important; }
   /* a new photo fades in, the old one leaves (only opacity/transform: smoothest when streamed) */
-  .poster { position:absolute; transform:rotate(var(--r)); opacity:0; transition:opacity 1.6s ease; will-change:opacity; }
+  .poster { position:absolute; transform:rotate(var(--r)); opacity:0; transition:opacity 1.6s ease; }
+  .poster[data-fx="none"] { transition:none !important; }
   .poster[data-fx="flip"] { transform:perspective(60em) rotate(var(--r)) rotateY(-80deg); transition:opacity 1.2s ease, transform 1.2s ease; }
   .poster.in { opacity:1; }
   .poster[data-fx="flip"].in { transform:perspective(60em) rotate(var(--r)) rotateY(0deg); }
-  .poster.out { transition:opacity .9s ease-in, transform .9s cubic-bezier(.5,0,.9,.6); opacity:0; will-change:opacity, transform; }
+  .poster.out { transition:opacity .9s ease-in, transform .9s cubic-bezier(.5,0,.9,.6); opacity:0; }
   .poster[data-fx="drop"].out { transform:translateY(18cqh) rotate(calc(var(--r) + var(--fr))); }
   .poster[data-fx="fade"].out { transition:opacity 1.4s ease; transform:rotate(var(--r)) scale(.97); }
   .poster[data-fx="blow"].out { transition:opacity 1s ease-in, transform 1s cubic-bezier(.4,0,.8,.5); transform:translate(var(--dx), -6cqh) rotate(calc(var(--r) + var(--fr) * 3)); }

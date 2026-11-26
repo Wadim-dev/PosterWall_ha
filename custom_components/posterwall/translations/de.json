@@ -132,6 +132,7 @@
       "effect": {
         "name": "Effekt",
         "state": {
+          "none": "Ohne",
           "drop": "Abfallen",
           "fade": "Überblenden",
           "blow": "Wegwehen",

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Final
 
 DOMAIN: Final = "posterwall"
-VERSION: Final = "1.0.6"
+VERSION: Final = "1.0.7"
 
 STATIC_URL: Final = "/posterwall_static"
 CARD_FILE: Final = "posterwall-card.js"
@@ -63,7 +63,7 @@ SETTINGS_DEFAULTS: Final[dict[str, object]] = {
     "night_brightness": 25,
 }
 SIZES: Final = ["small", "medium", "large"]
-EFFECTS: Final = ["drop", "fade", "blow", "flip", "random"]
+EFFECTS: Final = ["none", "drop", "fade", "blow", "flip", "random"]
 BACKGROUNDS: Final = ["cork", "wood", "slate", "black"]
 NIGHT_MODES: Final = ["off", "dim", "clock", "dark"]
 

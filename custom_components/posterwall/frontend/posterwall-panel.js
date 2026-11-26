@@ -1,7 +1,7 @@
 // PosterWall – sidebar panel: live preview, every setting of a wall and the screens of the house.
 // The display page of each wall (a dashboard "posterwall-<id>") is created here automatically and removed
 // again when its wall is deleted. No polling: the wall pushes every change over the websocket.
-const VERSION = "1.0.6";
+const VERSION = "1.0.7";
 const REPO = "https://github.com/Wadim-dev/PosterWall_ha";
 
 const TX = {
@@ -19,7 +19,7 @@ const TX = {
     days: "days", nightMode: "At night", nightFrom: "from", nightTo: "until", brightness: "Brightness",
     reread: "Read again", reading: "Reading photos …", photosFound: (n) => `${n.toLocaleString()} photos`, sec: "s",
     sizes: { small: "Small", medium: "Medium", large: "Large" },
-    effects: { drop: "Drop", fade: "Fade", blow: "Blow away", flip: "Flip", random: "Random" },
+    effects: { none: "None (lightest)", drop: "Drop", fade: "Fade", blow: "Blow away", flip: "Flip", random: "Random" },
     backgrounds: { cork: "Cork", wood: "Wood", slate: "Slate", black: "Black" },
     nights: { off: "Normal", dim: "Dimmed", clock: "Clock only", dark: "Dark" },
     sources: { media: "Home Assistant media", immich: "Immich", synology: "Synology Photos" },
@@ -51,7 +51,7 @@ const TX = {
     days: "Tage", nightMode: "Nachts", nightFrom: "von", nightTo: "bis", brightness: "Helligkeit",
     reread: "Neu einlesen", reading: "Fotos werden eingelesen …", photosFound: (n) => `${n.toLocaleString("de-DE")} Fotos`, sec: "s",
     sizes: { small: "Klein", medium: "Mittel", large: "Groß" },
-    effects: { drop: "Abfallen", fade: "Überblenden", blow: "Wegwehen", flip: "Umdrehen", random: "Zufall" },
+    effects: { none: "Ohne (am leichtesten)", drop: "Abfallen", fade: "Überblenden", blow: "Wegwehen", flip: "Umdrehen", random: "Zufall" },
     backgrounds: { cork: "Kork", wood: "Holz", slate: "Schiefer", black: "Schwarz" },
     nights: { off: "Normal", dim: "Abgedunkelt", clock: "Nur Uhr", dark: "Dunkel" },
     sources: { media: "Home-Assistant-Medien", immich: "Immich", synology: "Synology Photos" },
