@@ -1,7 +1,7 @@
 // PosterWall – sidebar panel: live preview, every setting of a wall and the screens of the house.
 // The display page of each wall (a dashboard "posterwall-<id>") is created here automatically and removed
 // again when its wall is deleted. No polling: the wall pushes every change over the websocket.
-const VERSION = "1.0.5";
+const VERSION = "1.0.6";
 const REPO = "https://github.com/Wadim-dev/PosterWall_ha";
 
 const TX = {

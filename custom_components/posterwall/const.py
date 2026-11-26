@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Final
 
 DOMAIN: Final = "posterwall"
-VERSION: Final = "1.0.5"
+VERSION: Final = "1.0.6"
 
 STATIC_URL: Final = "/posterwall_static"
 CARD_FILE: Final = "posterwall-card.js"

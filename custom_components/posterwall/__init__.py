@@ -16,6 +16,8 @@ from typing import Any
 
 from homeassistant.components import frontend, panel_custom
 from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.lovelace.const import LOVELACE_DATA
+from homeassistant.components.lovelace.resources import ResourceStorageCollection
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -28,7 +30,7 @@ from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
 from . import websocket
-from .const import CONF_DEVICE_TOKEN, CONF_DEVICES, DOMAIN, PANEL_ELEMENT, PANEL_FILE, PANEL_ICON, PANEL_URL, STATIC_URL, VERSION
+from .const import CARD_FILE, CONF_DEVICE_TOKEN, CONF_DEVICES, DOMAIN, PANEL_ELEMENT, PANEL_FILE, PANEL_ICON, PANEL_URL, STATIC_URL, VERSION
 from .devices import async_set_keep, async_show, needs_restart
 from .sources import AuthError, SourceError, create_source
 from .view import PhotoView
@@ -85,10 +87,30 @@ async def _panel(hass: HomeAssistant) -> None:
     )
 
 
+async def _card_resource(hass: HomeAssistant) -> None:
+    """Keep the card resource on this version, so screens that load again get the new card at once."""
+    if (data := hass.data.get(LOVELACE_DATA)) is None:
+        return
+    resources = data.resources
+    if not isinstance(resources, ResourceStorageCollection):
+        return  # resources in YAML: the user keeps them
+    path, url = f"{STATIC_URL}/{CARD_FILE}", f"{STATIC_URL}/{CARD_FILE}?v={VERSION}"
+    try:
+        await resources.async_get_info()
+        ours = [r for r in resources.async_items() if str(r.get("url", "")).split("?")[0] == path]
+        if not ours:
+            await resources.async_create_item({"res_type": "module", "url": url})
+        elif ours[0].get("url") != url:
+            await resources.async_update_item(ours[0]["id"], {"res_type": "module", "url": url})
+    except Exception as err:  # a dashboard problem must never stop the wall
+        _LOGGER.debug("Card resource could not be updated: %s", err)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: PosterWallConfigEntry) -> bool:
     """Start one wall."""
     source = create_source(hass, dict(entry.data))
     wall = PosterWall(hass, entry, source)
+    await _card_resource(hass)
     try:
         await wall.async_start()
     except AuthError as err:
