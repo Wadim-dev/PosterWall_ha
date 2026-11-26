@@ -1,8 +1,8 @@
 """Photo sources: Home Assistant media, Immich and Synology Photos.
 
-Every source lists photos as `Photo` objects. Media photos are resolved by Home
-Assistant itself; Immich and Synology photos are fetched by this integration
-(the card never sees an API key, password or session).
+Every source lists photos as `Photo` objects. Photos are delivered by this integration, shrunk to
+display size (the card never sees an API key, password or session); media from a source other than
+Home Assistant's own media folders is resolved by Home Assistant itself.
 """
 
 from __future__ import annotations
@@ -10,8 +10,9 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import logging
+from pathlib import Path
 import random
 import re
 from typing import Any
@@ -127,6 +128,10 @@ class PhotoSource:
     def folder_title(self, album: str) -> str:
         return album
 
+    def local_path(self, photo: Photo) -> Path | None:
+        """The file of a photo in one of Home Assistant's media folders (None: not such a photo)."""
+        return None
+
     async def async_fetch(self, photo: Photo) -> tuple[bytes, str]:
         """Image bytes and content type of a proxied photo."""
         raise NotImplementedError
@@ -221,8 +226,23 @@ class MediaPhotoSource(PhotoSource):
             photos = [p if p.date else Photo(p.id, year, p.favorite, p.albums, p.extra) for p in photos]
         return photos
 
-    async def async_fetch(self, photo: Photo) -> tuple[bytes, str]:  # pragma: no cover - not proxied
-        raise SourceError("media photos are resolved by Home Assistant")
+    def local_path(self, photo: Photo) -> Path | None:
+        # media-source://media_source/<media dir>/<path>: a file below that media folder, nothing else
+        prefix = "media-source://media_source/"
+        if not photo.id.startswith(prefix):
+            return None
+        media_dir, _, rel = photo.id[len(prefix):].partition("/")
+        base = self.hass.config.media_dirs.get(media_dir)
+        if base is None or not rel:
+            return None
+        root = Path(base)
+        path = root / unquote(rel)
+        if ".." in path.parts or not path.is_relative_to(root):
+            return None
+        return path
+
+    async def async_fetch(self, photo: Photo) -> tuple[bytes, str]:  # pragma: no cover - local files are read directly
+        raise SourceError("media photos are read from their folder")
 
 
 # ---------------------------------------------------------------- Immich
@@ -557,8 +577,19 @@ def _name(photo_id: str) -> str:
     return photo_id.rsplit("/", 1)[-1].lower()
 
 
+def index_days(photos: Iterable[Photo]) -> dict[str, list[Photo]]:
+    """Photos with a full date by "MM-DD" (read once per photo list, so picking stays quick on big collections)."""
+    out: dict[str, list[Photo]] = {}
+    for p in photos:
+        d = p.date
+        if d and len(d) == 10 and d[:4].isdigit():
+            out.setdefault(d[5:], []).append(p)
+    return out
+
+
 def pick(photos: list[Photo], recent: Iterable[str], *, today: datetime, favorites: bool, on_this_day: bool,
-         rnd: random.Random | None = None) -> tuple[Photo, int | None] | None:
+         rnd: random.Random | None = None, by_day: dict[str, list[Photo]] | None = None,
+         favs: list[Photo] | None = None) -> tuple[Photo, int | None] | None:
     """Choose the next photo: favourites more often, "on this day" photos now and then, nothing shown just before.
 
     Returns the photo and, for an "on this day" pick, how many years ago it was taken.
@@ -569,20 +600,21 @@ def pick(photos: list[Photo], recent: Iterable[str], *, today: datetime, favorit
     # the same picture often sits in two folders (backup and sorted copy): never show the same file name twice
     seen = {_name(i) for i in recent}
     if on_this_day and r.random() < 0.4:
-        day = today.strftime("%m-%d")
-        years = []
-        for p in photos:
-            if p.date and len(p.date) == 10 and _name(p.id) not in seen and int(p.date[:4]) < today.year:
-                diff = abs((datetime(2000, int(p.date[5:7]), int(p.date[8:10])) - datetime(2000, today.month, today.day)).days)
-                if p.date[5:] == day or diff <= 3:
-                    years.append(p)
+        days = by_day if by_day is not None else index_days(photos)
+        base = datetime(2000, today.month, today.day)
+        years: list[Photo] = []
+        for k in range(-3, 4):  # three days around today, within the year
+            d = base + timedelta(days=k)
+            if d.year == 2000:
+                years.extend(p for p in days.get(d.strftime("%m-%d"), ())
+                             if int(p.date[:4]) < today.year and _name(p.id) not in seen)  # type: ignore[index]
         if years:
             p = r.choice(years)
             return p, today.year - int(p.date[:4])  # type: ignore[index]
     if favorites and r.random() < 0.35:
-        favs = [p for p in photos if p.favorite and _name(p.id) not in seen]
-        if favs:
-            return r.choice(favs), None
+        fresh_favs = [p for p in (favs if favs is not None else photos) if p.favorite and _name(p.id) not in seen]
+        if fresh_favs:
+            return r.choice(fresh_favs), None
     for _ in range(12):
         p = r.choice(photos)
         if _name(p.id) not in seen:
