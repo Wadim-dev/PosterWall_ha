@@ -551,3 +551,25 @@ async def test_reload_other_screens(hass: HomeAssistant, loaded: MockConfigEntry
                                 suggested_object_id="tablet_screen")
     hass.states.async_set("switch.tablet_screen", "off")
     assert wd.screens_on(hass, loaded.runtime_data) == []
+
+
+async def test_card_resource_follows_version(hass: HomeAssistant, media_ready, media_entry: MockConfigEntry) -> None:
+    """After an update the card resource points to the new version before any screen loads again."""
+    from homeassistant.components.lovelace.const import LOVELACE_DATA
+
+    from custom_components.posterwall.const import VERSION
+
+    assert await async_setup_component(hass, "lovelace", {})
+    resources = hass.data[LOVELACE_DATA].resources
+    await resources.async_get_info()
+    await resources.async_create_item({"res_type": "module", "url": "/posterwall_static/posterwall-card.js?v=0.9"})
+    media_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(media_entry.entry_id)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    ours = [r for r in resources.async_items() if r["url"].startswith("/posterwall_static/")]
+    assert [r["url"] for r in ours] == [f"/posterwall_static/posterwall-card.js?v={VERSION}"]
+    # a fresh house gets the resource too
+    await resources.async_delete_item(ours[0]["id"])
+    assert await hass.config_entries.async_reload(media_entry.entry_id)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert [r["url"] for r in resources.async_items()] == [f"/posterwall_static/posterwall-card.js?v={VERSION}"]

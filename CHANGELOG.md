@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.6
+
+- Updates reach the screens by themselves: at start PosterWall points the card resource to the new version. Before, it was only changed when an admin opened the PosterWall page, so screens that loaded again after an update still got the old card.
+
 ## 1.0.5
 
 - The watchdog counts every display page once (a page asking for photos and reporting was counted twice, so one hung screen could go unnoticed next to a running one).
