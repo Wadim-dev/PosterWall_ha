@@ -309,13 +309,18 @@ async def ws_folder(hass: HomeAssistant, connection: ActiveConnection, msg: dict
     connection.send_result(msg["id"])
 
 
-@websocket_command({vol.Required("type"): "posterwall/alive", vol.Required("entry_id"): str, vol.Required("client"): vol.All(str, vol.Length(max=40))})
+@websocket_command({vol.Required("type"): "posterwall/alive", vol.Required("entry_id"): str, vol.Required("client"): vol.All(str, vol.Length(max=40)),
+                    # what the page holds (for diagnostics): JS heap in MB, photos (canvases), elements
+                    vol.Optional("heap"): vol.All(vol.Coerce(int), vol.Range(min=0, max=1_000_000)),
+                    vol.Optional("canvases"): vol.All(vol.Coerce(int), vol.Range(min=0, max=1_000_000)),
+                    vol.Optional("nodes"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100_000_000)),
+                    vol.Optional("up"): vol.All(vol.Coerce(int), vol.Range(min=0, max=10**9))})
 @callback
 def ws_alive(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]) -> None:
     """A full-screen display page is running fine."""
     if (wall := _wall(hass, connection, msg)) is None:
         return
-    wall.async_alive(msg["client"])
+    wall.async_alive(msg["client"], {k: msg[k] for k in ("heap", "canvases", "nodes", "up") if k in msg})
     connection.send_result(msg["id"])
 
 

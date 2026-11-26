@@ -60,6 +60,7 @@ class PosterWall:
         self.loading = False
         # display pages that show this wall full screen: id -> last time they pinned a photo (or slept at night)
         self.screens_alive: dict[str, datetime] = {}
+        self.screens_info: dict[str, dict[str, int]] = {}  # what each display page holds, for diagnostics
         self.reload_token = 0
         self.started = dt_util.utcnow()
         self.watchdog: Any = None
@@ -136,12 +137,15 @@ class PosterWall:
             self.hass.async_create_task(self.async_refresh(), f"{DOMAIN} refresh")
 
     @callback
-    def async_alive(self, client: str) -> None:
+    def async_alive(self, client: str, info: dict[str, int] | None = None) -> None:
         """A display page is fine: it pinned a photo (or sleeps at night)."""
         now = dt_util.utcnow()
         self.screens_alive[client] = now
+        if info:
+            self.screens_info[client] = info
         for old in [c for c, t in self.screens_alive.items() if now - t > timedelta(hours=1)]:
             del self.screens_alive[old]
+            self.screens_info.pop(old, None)
 
     def alive_count(self, within: timedelta) -> int:
         """How many display pages were fine lately."""
@@ -153,6 +157,7 @@ class PosterWall:
         """Every display page of this wall loads again."""
         self.reload_token += 1
         self.screens_alive.clear()
+        self.screens_info.clear()
         self.async_notify()
 
     def album_options(self) -> list[tuple[str, str]]:

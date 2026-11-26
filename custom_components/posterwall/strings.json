@@ -132,6 +132,7 @@
       "effect": {
         "name": "Effect",
         "state": {
+          "none": "None",
           "drop": "Drop",
           "fade": "Fade",
           "blow": "Blow away",

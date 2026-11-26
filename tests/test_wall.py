@@ -477,18 +477,23 @@ async def test_screens_never_hang(hass: HomeAssistant, loaded: MockConfigEntry, 
         calls.clear()
         for minute in (35, 41, 62):
             await dog.async_check(now + timedelta(minutes=minute))
-        assert dog.step == 4 and calls.count("button.press") == 1
+        # the Echo itself was restarted 31 minutes ago: not again within six hours
+        assert dog.step == 4 and calls.count("button.press") == 0
         from homeassistant.helpers import issue_registry as ir
         issue = ir.async_get(hass).async_get_issue(DOMAIN, dog.issue_id)
         assert issue is not None and issue.translation_placeholders["screens"] == "Show8"
         calls.clear()
         await dog.async_check(now + timedelta(minutes=120))
         assert not calls and dog.step == 4
-        # a page asks for photos again: all fine, the repair goes
+        # a page asks for photos again: all fine; the repair goes once it ran an hour without a break
         await client.send_json_auto_id({"type": "posterwall/next", "entry_id": loaded.entry_id})
         assert (await client.receive_json())["success"]
         await dog.async_check(now + timedelta(minutes=121))
-        assert dog.step == 0 and dog.short_since is None
+        assert dog.step == 0 and dog.short_since is None and dog.rounds == 2
+        assert ir.async_get(hass).async_get_issue(DOMAIN, dog.issue_id) is not None
+        wall.screens_alive["abc"] = now + timedelta(minutes=182)
+        await dog.async_check(now + timedelta(minutes=182))
+        assert dog.rounds == 0
         assert ir.async_get(hass).async_get_issue(DOMAIN, dog.issue_id) is None
         # a page counts once, whether it asks for photos or reports
         wall.screens_alive.clear()
@@ -506,7 +511,7 @@ async def test_screens_never_hang(hass: HomeAssistant, loaded: MockConfigEntry, 
         hass.states.async_set("light.show8_screen", "off")
         assert wd.screens_on(hass, wall) == []
         hass.states.async_set("light.show8_screen", "on")
-        # the button: pages load again at once and the Echo restarts
+        # the button: pages load again at once, the Echo restarts and the watchdog starts afresh
         calls.clear()
         await hass.services.async_call("button", "press", {"entity_id": "button.kitchen_reload_screens"}, blocking=True)
         assert "button.press" in calls and wall.reload_token == token + 3
@@ -573,3 +578,76 @@ async def test_card_resource_follows_version(hass: HomeAssistant, media_ready, m
     assert await hass.config_entries.async_reload(media_entry.entry_id)
     await hass.async_block_till_done(wait_background_tasks=True)
     assert [r["url"] for r in resources.async_items()] == [f"/posterwall_static/posterwall-card.js?v={VERSION}"]
+
+
+async def test_no_endless_restarts(hass: HomeAssistant, loaded: MockConfigEntry, hass_ws_client) -> None:
+    """A screen that breaks down again and again (its server runs out of memory) is not restarted forever."""
+    from unittest.mock import patch
+
+    from homeassistant.helpers import issue_registry as ir
+
+    hass.config.components.add("esphome")
+    esp = MockConfigEntry(domain="esphome")
+    esp.add_to_hass(hass)
+    dev_reg, ent_reg = dr.async_get(hass), er.async_get(hass)
+    echo = dev_reg.async_get_or_create(config_entry_id=esp.entry_id, identifiers={("esphome", "show8")}, name="Show8")
+    ent_reg.async_get_or_create("select", "esphome", "show8-dts", device_id=echo.id, suggested_object_id="show8_dashboard_to_show")
+    ent_reg.async_get_or_create("select", "esphome", "show8-d", device_id=echo.id, suggested_object_id="show8_dashboard")
+    ent_reg.async_get_or_create("button", "esphome", "show8-restart", device_id=echo.id, suggested_object_id="show8_restart",
+                                original_device_class="restart")
+    hass.states.async_set("select.show8_dashboard", "Streamed", {"options": ["Off", "Streamed"]})
+    hass.states.async_set("select.show8_dashboard_to_show", "PosterWall Kitchen", {"options": ["PosterWall Kitchen"]})
+    presses: list[str] = []
+
+    async def record(call: ServiceCall) -> None:
+        pass
+
+    for name in ("show8_dashboard_hide", "show8_dashboard_show"):
+        hass.services.async_register("esphome", name, record)
+
+    @callback
+    def pressed(event) -> None:
+        if event.data["domain"] == "button" and event.data["service_data"].get("entity_id") == "button.show8_restart":
+            presses.append(event.data["service_data"]["entity_id"])
+
+    hass.bus.async_listen("call_service", pressed)
+    hass.services.async_register("select", "select_option", record)
+    hass.services.async_register("switch", "turn_on", record)
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "posterwall/keep", "entry_id": loaded.entry_id,
+                                    "screen": "techo5:select.show8_dashboard_to_show", "keep": True})
+    assert (await client.receive_json())["success"]
+    wall = loaded.runtime_data
+    dog = wall.watchdog
+    t = dt_util.utcnow() + timedelta(minutes=10)
+
+    async def run(start: int, end: int, *, ok: bool) -> None:
+        for m in range(start, end):
+            if ok:
+                wall.screens_alive["p"] = t + timedelta(minutes=m)
+            await dog.async_check(t + timedelta(minutes=m))
+
+    with patch("custom_components.posterwall.devices.asyncio.sleep"):
+        wall.screens_alive.clear()
+        await run(0, 40, ok=False)  # first round: the Echo restarts once
+        assert presses == ["button.show8_restart"] and dog.rounds == 1
+        # the Echo is starting: nothing to watch, nothing forgotten
+        hass.states.async_set("select.show8_dashboard", "unavailable")
+        await run(40, 45, ok=False)
+        assert dog.rounds == 1
+        hass.states.async_set("select.show8_dashboard", "Streamed", {"options": ["Off", "Streamed"]})
+        await run(45, 65, ok=True)  # runs for 20 minutes …
+        assert dog.step == 0 and dog.rounds == 1
+        wall.screens_alive.clear()
+        await run(65, 120, ok=False)  # … and breaks down again: no second Echo restart, the repair says why
+        assert presses == ["button.show8_restart"] and dog.step == 4
+        assert ir.async_get(hass).async_get_issue(DOMAIN, dog.issue_id) is not None
+        await run(120, 300, ok=False)
+        assert presses == ["button.show8_restart"]
+    # the page reports what it holds, for the diagnostics
+    await client.send_json_auto_id({"type": "posterwall/alive", "entry_id": loaded.entry_id, "client": "c1",
+                                    "heap": 40, "canvases": 11, "nodes": 900, "up": 12})
+    assert (await client.receive_json())["success"]
+    diag = await async_get_config_entry_diagnostics(hass, loaded)
+    assert diag["screens_info"]["c1"] == {"heap": 40, "canvases": 11, "nodes": 900, "up": 12}
+    assert diag["watchdog"]["rounds"] == 2
