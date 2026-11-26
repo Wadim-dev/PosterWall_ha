@@ -101,7 +101,7 @@ async def test_websocket(hass: HomeAssistant, loaded: MockConfigEntry, hass_ws_c
     await client.send_json_auto_id({"type": "posterwall/next", "entry_id": loaded.entry_id, "count": 3})
     res = (await client.receive_json())["result"]
     assert len(res["photos"]) == 3 and res["total"] == 6
-    assert all(p["url"].startswith("/media/local/Photos/") and "authSig=" in p["url"] for p in res["photos"])
+    assert all(p["url"].startswith(f"/api/posterwall/{loaded.entry_id}/photo/") and "authSig=" in p["url"] for p in res["photos"])
     assert len({p["id"] for p in res["photos"]}) == 3
 
     await client.send_json_auto_id({"type": "posterwall/options", "entry_id": loaded.entry_id, "weather": "", "calendars": ["calendar.x"], "events": 2})
@@ -127,6 +127,54 @@ async def test_photo_media_is_served(hass: HomeAssistant, loaded: MockConfigEntr
     resp = await http.get(url)
     assert resp.status == 200
     assert (await http.get(url.split("?")[0])).status == 401
+
+
+async def test_photos_go_out_display_sized(hass: HomeAssistant, loaded: MockConfigEntry, media_dir, hass_client_no_auth) -> None:
+    """A big phone photo leaves Home Assistant as a small JPEG, turned the right way; nothing outside the media folder."""
+    import io
+
+    from homeassistant.components.http.auth import async_sign_path
+    from PIL import Image
+
+    from custom_components.posterwall.shrink import shrink
+    from custom_components.posterwall.sources import Photo
+    from custom_components.posterwall.wall import _key
+
+    big = Image.new("RGB", (4000, 3000), (200, 30, 30))
+    exif = Image.Exif()
+    exif[0x0112] = 6  # taken upright: the camera stored it turned
+    buf = io.BytesIO()
+    big.save(buf, "JPEG", quality=95, exif=exif)
+    (media_dir / "Photos/2021/big.jpg").write_bytes(buf.getvalue() + b"\0" * 300_000)
+    wall = loaded.runtime_data
+    await wall.async_refresh()
+    pid = "media-source://media_source/local/Photos/2021/big.jpg"
+    assert wall.photo(_key(pid)) is wall.photo(pid) is not None
+    http = await hass_client_no_auth()
+    resp = await http.get(async_sign_path(hass, f"/api/posterwall/{loaded.entry_id}/photo/{_key(pid)}", timedelta(minutes=1)))
+    assert resp.status == 200 and resp.headers["Content-Type"] == "image/jpeg"
+    body = await resp.read()
+    assert len(body) < 100_000
+    with Image.open(io.BytesIO(body)) as small:
+        assert small.size == (720, 960)  # upright, as wide as the card draws it
+    # a file that is gone: the card takes the next photo
+    (media_dir / "Photos/2021/big.jpg").unlink()
+    resp = await http.get(async_sign_path(hass, f"/api/posterwall/{loaded.entry_id}/photo/{_key(pid)}", timedelta(minutes=1)))
+    assert resp.status == 502
+    # only files below a media folder
+    src = wall.source
+    assert src.local_path(Photo("media-source://media_source/local/../secrets.yaml")) is None
+    assert src.local_path(Photo("media-source://media_source/other/x.jpg")) is None
+    assert src.local_path(Photo("media-source://dlna_dms/x/y.jpg")) is None
+    assert src.local_path(Photo("media-source://media_source/local//etc/passwd")) is None
+    # small photos and what is no image go out unchanged; transparent images get a white ground
+    assert shrink(b"tiny", "image/jpeg") == (b"tiny", "image/jpeg")
+    assert shrink(b"x" * 300_000, "image/heic") == (b"x" * 300_000, "image/heic")
+    png = io.BytesIO()
+    Image.new("RGBA", (2000, 2000), (0, 0, 0, 0)).save(png, "PNG")
+    out, kind = shrink(png.getvalue() + b"\0" * 300_000, "image/png")
+    with Image.open(io.BytesIO(out)) as img:
+        assert kind == "image/jpeg" and img.size == (720, 720) and img.getpixel((5, 5)) == (255, 255, 255)
 
 
 async def test_screens_and_show(hass: HomeAssistant, loaded: MockConfigEntry, hass_ws_client) -> None:
@@ -242,6 +290,19 @@ def test_pick() -> None:
     only = [Photo("a"), Photo("b")]
     assert all(pick(only, ["a"], today=today, favorites=False, on_this_day=False, rnd=rnd)[0].id == "b" for _ in range(20))
     assert pick(only, ["a", "b"], today=today, favorites=False, on_this_day=False, rnd=rnd) is not None
+    # "on this day": three days around today within the year, earlier years only, from the day index
+    from custom_components.posterwall.sources import index_days
+
+    dated = [Photo("in", "2020-11-28"), Photo("out", "2020-11-29"), Photo("future", "2027-11-25"), Photo("now", "2026-11-25"),
+             Photo("year", "2020"), Photo("bad", "20x0-11-25")]
+    idx = index_days(dated)
+    assert sorted(p.id for ps in idx.values() for p in ps) == ["future", "in", "now", "out"]
+    hits = [pick(dated, [], today=today, favorites=False, on_this_day=True, rnd=random.Random(k), by_day=idx) for k in range(200)]
+    assert {p.id for p, y in hits if y is not None} == {"in"} and all(y == 6 for p, y in hits if y is not None)
+    # no wrap over new year (as before): 30 Dec is not "around" 1 Jan
+    newyear = [Photo("dec", "2020-12-30")]
+    assert all(pick(newyear, [], today=datetime(2026, 1, 1), favorites=False, on_this_day=True, rnd=random.Random(k))[1] is None
+               for k in range(50))
 
 
 async def test_card_and_panel_files(hass: HomeAssistant, loaded: MockConfigEntry, hass_client) -> None:

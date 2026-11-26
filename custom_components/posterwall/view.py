@@ -1,4 +1,4 @@
-"""Delivers Immich and Synology photos to the displays (signed, short-lived URLs)."""
+"""Delivers the photos to the displays, shrunk to display size (signed, short-lived URLs)."""
 
 from __future__ import annotations
 
@@ -28,10 +28,10 @@ class PhotoView(HomeAssistantView):
             return web.Response(status=HTTPStatus.NOT_FOUND)
         wall = entry.runtime_data
         photo = wall.photo(photo_id)
-        if photo is None or not wall.source.proxied:
+        if photo is None:
             return web.Response(status=HTTPStatus.NOT_FOUND)
         try:
-            body, content_type = await wall.source.async_fetch(photo)
+            body, content_type = await wall.async_photo_bytes(photo)
         except SourceError as err:
             _LOGGER.debug("Photo %s could not be fetched: %s", photo_id, err)
             return web.Response(status=HTTPStatus.BAD_GATEWAY)

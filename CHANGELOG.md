@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.8
+
+- **Photos leave Home Assistant display-sized:** every photo is shrunk to the size the card draws (at most 720 pixels wide, JPEG) before it goes to a screen – also photos from Home Assistant media folders, which went out as the full file before. A phone photo is now about 50–100 KB instead of several MB: less network, less decoding, and a long-running browser no longer piles up memory. On an Echo with TECHO5 the full files made the dashboard server's memory grow by about 30 MB a minute until its pages were stopped (reproduced: big photos +45 MB a minute, shrunk photos flat). Photos are turned upright by their EXIF orientation; transparent images get a white ground; at most two photos are shrunk at once.
+- Choosing the next photo no longer walks through the whole collection for *On this day* and favourites (lists are prepared once per photo read).
+- The card redraws the weather only when the weather changed, not on every state change in Home Assistant.
+
 ## 1.0.7
 
 - **No endless restarts:** a kept Echo is restarted itself at most once in six hours, and a screen only counts as fixed after an hour without a break. A screen that keeps breaking down (for example because the TECHO5 dashboard server runs out of memory) is left alone after two rounds and a repair says why. Before, a screen that ran again for a few minutes started the count afresh, so Echos could be restarted every half hour all day.

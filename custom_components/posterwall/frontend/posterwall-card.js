@@ -4,7 +4,7 @@
    Robust on weak devices and streamed screens: one photo is loaded at a time (one in stock), every step has a time limit,
    a watchdog restarts a stalled wall, photos are decoded at most 720 px wide. */
 (() => {
-  const VERSION = "1.0.7";
+  const VERSION = "1.0.8";
   const T = {
     en: {
       loading: "Loading photos …", none: "No photos found in this folder or album.", pick: "Choose a wall in the card settings.",
@@ -218,7 +218,7 @@
     /* ---------- weather ---------- */
     _weatherSub() {
       if (this._fc) { this._fc.then((u) => u && u()).catch(() => {}); this._fc = null; }
-      this._forecast = null;
+      this._forecast = null; this._wState = null;
       if (!this._p || !this._p.weather) return;
       this._fc = this._hass.connection.subscribeMessage((m) => { this._forecast = m.forecast; this._showWeather(); },
         { type: "weather/subscribe_forecast", forecast_type: "daily", entity_id: this._p.weather }).catch(() => null);
@@ -227,6 +227,9 @@
     _showWeather() {
       const r = this._root; if (!r || !this._hass || !this._p || !this._p.weather) return;
       const s = this._hass.states[this._p.weather]; if (!s) return;
+      // hass changes with every state in Home Assistant: draw only when the weather itself changed
+      if (s === this._wState && this._forecast === this._wFc) return;
+      this._wState = s; this._wFc = this._forecast;
       const ic = r.querySelector(".weather ha-icon"), icon = WEATHER[s.state] || "mdi:weather-partly-cloudy";
       if (ic.getAttribute("icon") !== icon) ic.setAttribute("icon", icon);
       const t = s.attributes.temperature;
@@ -340,7 +343,7 @@
         // what the page holds, shown in the diagnostics: finds a page that grows
         if (performance.memory) msg.heap = Math.round(performance.memory.usedJSHeapSize / 1048576);
         msg.canvases = this._root.querySelectorAll("canvas").length + this._stock.length;
-        msg.nodes = document.getElementsByTagName("*").length;
+        msg.nodes = this._root.querySelectorAll("*").length;
         msg.up = Math.round((Date.now() - this._since) / 60000);
       } catch (e) { /* only for diagnostics */ }
       this._hass.callWS(msg).catch(() => {});

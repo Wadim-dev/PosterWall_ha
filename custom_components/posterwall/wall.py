@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import deque
 from collections.abc import Callable
 from datetime import datetime, timedelta
+import hashlib
 import logging
 from typing import Any
 
@@ -34,12 +36,18 @@ from .const import (
     SIGNAL_UPDATE,
     VERSION,
 )
-from .sources import Album, Photo, PhotoSource, SourceError, pick
+from .shrink import shrink
+from .sources import Album, Photo, PhotoSource, SourceError, index_days, pick
 
 _LOGGER = logging.getLogger(__name__)
 
 ALL_TITLE = {"de": "Alle Fotos", "en": "All photos"}
 FAV_TITLE = {"de": "Favoriten", "en": "Favourites"}
+
+
+def _key(photo_id: str) -> str:
+    """A short key of a photo for its URL."""
+    return hashlib.sha256(photo_id.encode()).hexdigest()[:24]
 
 
 class PosterWall:
@@ -54,6 +62,10 @@ class PosterWall:
         self.albums: list[Album] = []
         self.photos: list[Photo] = []
         self._by_id: dict[str, Photo] = {}
+        self._favs: list[Photo] = []
+        self._by_day: dict[str, list[Photo]] = {}  # dated photos by "MM-DD" for "on this day"
+        self._by_key: dict[str, Photo] = {}  # a short key for the photo URL (media ids hold slashes)
+        self._shrinking = asyncio.Semaphore(2)  # photos shrunk at the same time: keeps Home Assistant light
         self.recent: deque[str] = deque(maxlen=60)
         self.last_refresh: datetime | None = None
         self.error: str | None = None
@@ -113,6 +125,9 @@ class PosterWall:
             self.error = None
             self.photos = photos
             self._by_id = {p.id: p for p in photos}
+            self._by_key = {_key(p.id): p for p in photos}
+            self._by_day = index_days(photos)
+            self._favs = [p for p in photos if p.favorite]
             self.recent.clear()
             self.last_refresh = dt_util.utcnow()
         finally:
@@ -196,7 +211,20 @@ class PosterWall:
     # ------------------------------------------------------------ photos
 
     def photo(self, photo_id: str) -> Photo | None:
-        return self._by_id.get(photo_id)
+        return self._by_id.get(photo_id) or self._by_key.get(photo_id)
+
+    async def async_photo_bytes(self, photo: Photo) -> tuple[bytes, str]:
+        """The display-sized image of a photo."""
+        async with self._shrinking:
+            if (path := self.source.local_path(photo)) is not None:
+                try:
+                    return await self.hass.async_add_executor_job(shrink, path)
+                except OSError as err:
+                    raise SourceError(f"photo cannot be read: {err}") from err
+            if not self.source.proxied:
+                raise SourceError("photo is not delivered by PosterWall")
+            body, content_type = await self.source.async_fetch(photo)
+            return await self.hass.async_add_executor_job(shrink, body, content_type)
 
     async def async_next(self, count: int = 1) -> list[dict[str, Any]]:
         """The next photos for a display, each with a short-lived URL."""
@@ -204,7 +232,7 @@ class PosterWall:
         now = dt_util.now()
         for _ in range(max(1, min(count, 4))):
             chosen = pick(self.photos, self.recent, today=now, favorites=bool(self.settings["favorites"]),
-                          on_this_day=bool(self.settings["on_this_day"]))
+                          on_this_day=bool(self.settings["on_this_day"]), by_day=self._by_day, favs=self._favs)
             if chosen is None:
                 break
             photo, years = chosen
@@ -219,11 +247,11 @@ class PosterWall:
         return out
 
     async def _url(self, photo: Photo) -> str:
-        if not self.source.proxied:
+        if not self.source.proxied and self.source.local_path(photo) is None:
             try:
                 play = await media_source.async_resolve_media(self.hass, photo.id, None)
             except media_source.Unresolvable as err:
                 raise SourceError(str(err)) from err
             return async_process_play_media_url(self.hass, play.url, allow_relative_url=True)
-        path = PHOTO_URL.format(entry_id=self.entry.entry_id, photo_id=photo.id)
+        path = PHOTO_URL.format(entry_id=self.entry.entry_id, photo_id=_key(photo.id))
         return async_sign_path(self.hass, path, timedelta(hours=1))

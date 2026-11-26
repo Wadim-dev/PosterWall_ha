@@ -199,7 +199,7 @@ actions:
 
 ## How data is updated
 
-No entity polls. The photo list is read once at start, every 6 hours and on the button. Settings reach every screen at once over the Home Assistant connection. Each screen loads one photo at a time, shrinks it before drawing and reloads itself once a night, so it runs for months on old tablets. A page that stops is loaded again by the integration (see *Screens never hang*).
+No entity polls. The photo list is read once at start, every 6 hours and on the button. Settings reach every screen at once over the Home Assistant connection. Home Assistant shrinks every photo to display size (at most 720 pixels wide) before it goes out, each screen loads one photo at a time and reloads itself once a night, so it runs for months on old tablets. A page that stops is loaded again by the integration (see *Screens never hang*).
 
 ## Known limitations
 
@@ -253,7 +253,7 @@ Diagnostics (*Settings → Devices & services → PosterWall → ⋮ → Downloa
 
 **Bildschirme hängen nie fest:** Jede Anzeigeseite meldet sich, solange sie Fotos anheftet. Meldet sich ein dauerhaft gezeigter Echo oder ein Fully-Kiosk-Tablet mit eingeschaltetem Bildschirm nicht mehr, bringt PosterWall ihn selbst wieder in Gang, Schritt für Schritt: Seite neu laden (nach 2 Minuten), Seite neu öffnen (Echo: Dashboard zu und wieder auf), zuletzt den Echo neu starten – den Echo selbst höchstens einmal in sechs Stunden. Behoben ist es erst nach einer Stunde ohne Ausfall: Fällt ein Bildschirm immer wieder aus oder helfen zwei Runden nicht (zum Beispiel weil der Dashboard-Server von TECHO5 nicht läuft oder keinen Speicher mehr hat), hört PosterWall auf und zeigt stattdessen einen Hinweis unter Reparaturen. **Bildschirme neu laden** im Panel (oder die Knopf-Entität) macht das sofort.
 
-**Quellen:** Bei Home Assistant Medien zählt jeder Ordner unter *Medien*, auch NAS-Freigaben (*Einstellungen → System → Speicher*); das Datum kommt aus dem Dateinamen oder einem Jahresordner. Für Immich reicht ein API-Schlüssel mit *asset.read*, *asset.view*, *album.read* und *user.read*. Synology Photos zeigt persönlichen und geteilten Bereich mit ihren echten Ordnern (wie im Reiter *Fotos*) und die Alben. Für Synology Photos am besten einen eigenen Benutzer nur mit Leserechten anlegen; bei Zwei-Faktor-Anmeldung fragt die Einrichtung einmal nach dem Code. Passwörter und Schlüssel bleiben in Home Assistant und gehen nie an einen Bildschirm.
+**Quellen:** Bei Home Assistant Medien zählt jeder Ordner unter *Medien*, auch NAS-Freigaben (*Einstellungen → System → Speicher*); das Datum kommt aus dem Dateinamen oder einem Jahresordner. Für Immich reicht ein API-Schlüssel mit *asset.read*, *asset.view*, *album.read* und *user.read*. Synology Photos zeigt persönlichen und geteilten Bereich mit ihren echten Ordnern (wie im Reiter *Fotos*) und die Alben. Für Synology Photos am besten einen eigenen Benutzer nur mit Leserechten anlegen; bei Zwei-Faktor-Anmeldung fragt die Einrichtung einmal nach dem Code. Passwörter und Schlüssel bleiben in Home Assistant und gehen nie an einen Bildschirm. Jedes Foto verkleinert Home Assistant vorher auf Anzeigegröße (höchstens 720 Pixel breit, etwa 50–100 KB statt mehrerer MB) – schont Netz, Bildschirm und Speicher, auch bei gestreamten Echos.
 
 *Neu konfigurieren* wechselt die Quelle oder den Ordner einer Wand; bei Home Assistant Medien beginnt es im aktuellen Ordner. Einstellungen, Entitäten und Bildschirme bleiben.
 
