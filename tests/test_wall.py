@@ -473,10 +473,28 @@ async def test_screens_never_hang(hass: HomeAssistant, loaded: MockConfigEntry, 
         assert dog.step == 0
         await dog.async_check(now + timedelta(minutes=32))
         assert dog.step == 1 and wall.reload_token == token + 2
-        # a page reports again: all fine
-        wall.screens_alive["abc"] = now + timedelta(minutes=32)
-        await dog.async_check(now + timedelta(minutes=33))
+        # second round without success: the Echo is left alone and a repair says why
+        calls.clear()
+        for minute in (35, 41, 62):
+            await dog.async_check(now + timedelta(minutes=minute))
+        assert dog.step == 4 and calls.count("button.press") == 1
+        from homeassistant.helpers import issue_registry as ir
+        issue = ir.async_get(hass).async_get_issue(DOMAIN, dog.issue_id)
+        assert issue is not None and issue.translation_placeholders["screens"] == "Show8"
+        calls.clear()
+        await dog.async_check(now + timedelta(minutes=120))
+        assert not calls and dog.step == 4
+        # a page asks for photos again: all fine, the repair goes
+        await client.send_json_auto_id({"type": "posterwall/next", "entry_id": loaded.entry_id})
+        assert (await client.receive_json())["success"]
+        await dog.async_check(now + timedelta(minutes=121))
         assert dog.step == 0 and dog.short_since is None
+        assert ir.async_get(hass).async_get_issue(DOMAIN, dog.issue_id) is None
+        # the preview in the panel does not count as a screen
+        wall.screens_alive.clear()
+        await client.send_json_auto_id({"type": "posterwall/next", "entry_id": loaded.entry_id, "preview": True})
+        assert (await client.receive_json())["success"]
+        assert wall.alive_count(timedelta(minutes=3)) == 0
         # screen off (night): nothing to watch
         hass.states.async_set("light.show8_screen", "off")
         assert wd.screens_on(hass, wall) == []

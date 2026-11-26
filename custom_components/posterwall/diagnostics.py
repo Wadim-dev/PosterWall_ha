@@ -26,4 +26,6 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: PosterW
         "favorites": sum(1 for p in wall.photos if p.favorite),
         "error": wall.error,
         "last_refresh": wall.last_refresh.isoformat() if wall.last_refresh else None,
+        "screens_alive": {c: t.isoformat() for c, t in wall.screens_alive.items()},
+        "watchdog": {"step": wall.watchdog.step, "restarts": wall.watchdog.restarts} if wall.watchdog else None,
     }
