@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.4
+
+- The watchdog now sees every display page that asks for photos, also pages still running an older card in a streaming browser (Echo with TECHO5). Before, such pages did not report and kept Echos were restarted again and again.
+- No endless restarts: after two rounds without success PosterWall leaves the screen alone and shows a repair that says why (most often the TECHO5 dashboard server is down). It goes away by itself when photos come again.
+- Diagnostics show which display pages reported lately and the watchdog's step.
+
 ## 1.0.3
 
 - **Screens never hang:** every display page reports while it pins photos. A kept Echo (TECHO5) or Fully Kiosk tablet whose screen is on and that stops reporting is brought back by itself, step by step: page loaded again, page opened anew (Echo: dashboard closed and opened), finally the Echo restarts.

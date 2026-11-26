@@ -234,5 +234,11 @@
     "echo_not_ready": {
       "message": "The Echo does not list the page “{page}” yet. It reads its list of dashboards every few minutes – try again in 5 minutes."
     }
+  },
+  "issues": {
+    "screens_hung": {
+      "title": "PosterWall {wall}: a screen shows no photos",
+      "description": "{screens} has shown no new photos for a while and restarting did not help, so PosterWall stops restarting it. Most common cause with Echos: the TECHO5 dashboard server is not running. This notice goes away by itself as soon as the screen shows photos again."
+    }
   }
 }

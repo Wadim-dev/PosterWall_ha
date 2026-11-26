@@ -90,12 +90,15 @@ def ws_subscribe(hass: HomeAssistant, connection: ActiveConnection, msg: dict[st
     vol.Required("type"): "posterwall/next",
     vol.Required("entry_id"): str,
     vol.Optional("count", default=1): vol.All(int, vol.Range(min=1, max=4)),
+    vol.Optional("preview", default=False): bool,
 })
 @async_response
 async def ws_next(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]) -> None:
-    """The next photos to pin on the wall."""
+    """The next photos to pin on the wall (a display page that asks for photos is running)."""
     if (wall := _wall(hass, connection, msg)) is None:
         return
+    if not msg["preview"]:
+        wall.async_alive(f"connection-{id(connection)}")
     connection.send_result(msg["id"], {"photos": await wall.async_next(msg["count"]), "total": len(wall.photos)})
 
 

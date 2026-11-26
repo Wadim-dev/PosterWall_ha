@@ -13,11 +13,11 @@ from typing import TYPE_CHECKING
 
 from homeassistant.const import STATE_OFF
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import entity_registry as er, issue_registry as ir
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_DEVICES
-from .devices import KIND_FULLY, KIND_TECHO5, STREAMED, TECHO5_MODE, TECHO5_SHOW, async_reload_screen, dashboard_title
+from .const import CONF_DEVICES, DOMAIN
+from .devices import KIND_FULLY, KIND_TECHO5, STREAMED, TECHO5_MODE, TECHO5_SHOW, async_reload_screen, dashboard_title, find_screens
 
 if TYPE_CHECKING:
     from .wall import PosterWall
@@ -28,6 +28,7 @@ ALIVE = timedelta(minutes=3)  # a page that pinned nothing for this long counts 
 GRACE = timedelta(minutes=5)  # after a start or a reload
 SOFT_WAIT = timedelta(minutes=2)  # pages told to load again: wait this long before restarting screens
 PAUSE = timedelta(minutes=20)  # at most one restart of the screens in this time
+ROUNDS = 2  # rounds of restarts; then the screens are left alone and a repair tells why
 
 
 def screens_on(hass: HomeAssistant, wall: PosterWall) -> list[str]:
@@ -61,16 +62,23 @@ class Watchdog:
         self.hass = hass
         self.wall = wall
         self.short_since: datetime | None = None
-        self.step = 0  # 0 fine, 1 pages told to load again, 2 screens restarted, 3 devices restarted
+        self.step = 0  # 0 fine, 1 pages told to load again, 2 screens restarted, 3 devices restarted, 4 given up
         self.step_at: datetime | None = None
         self.restarts = 0
+        self.rounds = 0
+
+    @property
+    def issue_id(self) -> str:
+        return f"screens_hung_{self.wall.entry.entry_id}"
 
     async def async_check(self, now: datetime) -> None:
         wall = self.wall
         expected = screens_on(self.hass, wall)
         if not expected or now - wall.started < GRACE or not wall.photos or wall.alive_count(ALIVE) >= len(expected):
+            if self.step == 4 or self.rounds:
+                ir.async_delete_issue(self.hass, DOMAIN, self.issue_id)
             self.short_since = self.step_at = None
-            self.step = 0
+            self.step = self.rounds = 0
             return
         if self.short_since is None:
             self.short_since = now
@@ -86,7 +94,17 @@ class Watchdog:
             _LOGGER.warning("PosterWall %s: still no new photos, restarting the devices %s", wall.entry.title, ", ".join(expected))
             await async_restart_screens(self.hass, wall, expected, device=True)
         elif self.step == 3 and since >= PAUSE:
-            self.step = -1  # start over
+            self.rounds += 1
+            if self.rounds < ROUNDS:
+                self.step = -1  # start over
+            else:
+                # restarting did not help (the screen's server may be down): stop and say so
+                _LOGGER.warning("PosterWall %s: restarting did not help, leaving %s alone", wall.entry.title, ", ".join(expected))
+                names = {s.id: s.name for s in find_screens(self.hass)}
+                ir.async_create_issue(self.hass, DOMAIN, self.issue_id, is_fixable=False, severity=ir.IssueSeverity.WARNING,
+                                      translation_key="screens_hung",
+                                      translation_placeholders={"wall": wall.entry.title,
+                                                                "screens": ", ".join(names.get(s, s) for s in expected)})
         else:
             return
         self.step += 1

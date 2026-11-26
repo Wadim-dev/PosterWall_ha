@@ -4,7 +4,7 @@
    Robust on weak devices and streamed screens: one photo is loaded at a time (one in stock), every step has a time limit,
    a watchdog restarts a stalled wall, photos are decoded at most 720 px wide. */
 (() => {
-  const VERSION = "1.0.3";
+  const VERSION = "1.0.4";
   const T = {
     en: {
       loading: "Loading photos …", none: "No photos found in this folder or album.", pick: "Choose a wall in the card settings.",
@@ -272,7 +272,7 @@
       // ask the integration for the next photo, fetch and shrink it; every step has a time limit
       for (let tries = 0; tries < 4; tries++) {
         let r;
-        try { r = await limit(this._hass.callWS({ type: "posterwall/next", entry_id: this._c.wall, count: 1 }), 15000); }
+        try { r = await limit(this._hass.callWS({ type: "posterwall/next", entry_id: this._c.wall, count: 1, preview: !this._c.fullscreen || !!this._c.preview }), 15000); }
         catch (e) { return null; }
         const ph = r.photos && r.photos[0]; if (!ph) return null;
         if (this._stack.some((o) => o._id === ph.id) && r.total > this._stack.length + 1) continue;

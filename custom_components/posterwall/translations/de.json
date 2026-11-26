@@ -234,5 +234,11 @@
     "echo_not_ready": {
       "message": "Der Echo kennt die Seite „{page}“ noch nicht. Er liest seine Dashboard-Liste alle paar Minuten neu – versuch es in 5 Minuten noch einmal."
     }
+  },
+  "issues": {
+    "screens_hung": {
+      "title": "PosterWall {wall}: Bildschirm zeigt keine Fotos",
+      "description": "{screens} zeigt seit einiger Zeit keine neuen Fotos, und Neustarten hat nicht geholfen. PosterWall startet den Bildschirm deshalb nicht weiter neu. Häufigste Ursache bei Echos: Der Dashboard-Server von TECHO5 läuft nicht. Sobald der Bildschirm wieder Fotos zeigt, verschwindet dieser Hinweis von selbst."
+    }
   }
 }
