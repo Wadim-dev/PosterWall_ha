@@ -4,7 +4,7 @@
    Robust on weak devices and streamed screens: one photo is loaded at a time (one in stock), every step has a time limit,
    a watchdog restarts a stalled wall, photos are decoded at most 720 px wide. */
 (() => {
-  const VERSION = "1.0.4";
+  const VERSION = "1.0.5";
   const T = {
     en: {
       loading: "Loading photos …", none: "No photos found in this folder or album.", pick: "Choose a wall in the card settings.",
@@ -272,7 +272,7 @@
       // ask the integration for the next photo, fetch and shrink it; every step has a time limit
       for (let tries = 0; tries < 4; tries++) {
         let r;
-        try { r = await limit(this._hass.callWS({ type: "posterwall/next", entry_id: this._c.wall, count: 1, preview: !this._c.fullscreen || !!this._c.preview }), 15000); }
+        try { r = await limit(this._hass.callWS({ type: "posterwall/next", entry_id: this._c.wall, count: 1, preview: !this._c.fullscreen || !!this._c.preview, client: this._client() }), 15000); }
         catch (e) { return null; }
         const ph = r.photos && r.photos[0]; if (!ph) return null;
         if (this._stack.some((o) => o._id === ph.id) && r.total > this._stack.length + 1) continue;
@@ -335,9 +335,9 @@
     _alive() {
       // a full-screen page tells the integration it runs fine; when it stops, the integration loads it again
       if (!this._c.fullscreen || this._c.preview || !this._hass) return;
-      if (!this._cid) this._cid = Math.random().toString(36).slice(2, 12);
-      this._hass.callWS({ type: "posterwall/alive", entry_id: this._c.wall, client: this._cid }).catch(() => {});
+      this._hass.callWS({ type: "posterwall/alive", entry_id: this._c.wall, client: this._client() }).catch(() => {});
     }
+    _client() { if (!this._cid) this._cid = Math.random().toString(36).slice(2, 12); return this._cid; }
     _guard() {
       // no new photo for too long: restart loading and ticking (the photos stay);
       // after three tries reload a full-screen page (at most once an hour)

@@ -490,6 +490,13 @@ async def test_screens_never_hang(hass: HomeAssistant, loaded: MockConfigEntry, 
         await dog.async_check(now + timedelta(minutes=121))
         assert dog.step == 0 and dog.short_since is None
         assert ir.async_get(hass).async_get_issue(DOMAIN, dog.issue_id) is None
+        # a page counts once, whether it asks for photos or reports
+        wall.screens_alive.clear()
+        await client.send_json_auto_id({"type": "posterwall/next", "entry_id": loaded.entry_id, "client": "p1"})
+        assert (await client.receive_json())["success"]
+        await client.send_json_auto_id({"type": "posterwall/alive", "entry_id": loaded.entry_id, "client": "p1"})
+        assert (await client.receive_json())["success"]
+        assert wall.alive_count(timedelta(minutes=3)) == 1
         # the preview in the panel does not count as a screen
         wall.screens_alive.clear()
         await client.send_json_auto_id({"type": "posterwall/next", "entry_id": loaded.entry_id, "preview": True})

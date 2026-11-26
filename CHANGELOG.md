@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.5
+
+- The watchdog counts every display page once (a page asking for photos and reporting was counted twice, so one hung screen could go unnoticed next to a running one).
+
 ## 1.0.4
 
 - The watchdog now sees every display page that asks for photos, also pages still running an older card in a streaming browser (Echo with TECHO5). Before, such pages did not report and kept Echos were restarted again and again.

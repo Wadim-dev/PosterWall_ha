@@ -91,6 +91,7 @@ def ws_subscribe(hass: HomeAssistant, connection: ActiveConnection, msg: dict[st
     vol.Required("entry_id"): str,
     vol.Optional("count", default=1): vol.All(int, vol.Range(min=1, max=4)),
     vol.Optional("preview", default=False): bool,
+    vol.Optional("client"): vol.All(str, vol.Length(max=40)),
 })
 @async_response
 async def ws_next(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]) -> None:
@@ -98,7 +99,8 @@ async def ws_next(hass: HomeAssistant, connection: ActiveConnection, msg: dict[s
     if (wall := _wall(hass, connection, msg)) is None:
         return
     if not msg["preview"]:
-        wall.async_alive(f"connection-{id(connection)}")
+        # one key per page: its own id, or (older cards) its connection
+        wall.async_alive(msg.get("client") or f"connection-{id(connection)}")
     connection.send_result(msg["id"], {"photos": await wall.async_next(msg["count"]), "total": len(wall.photos)})
 
 
