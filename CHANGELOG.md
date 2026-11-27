@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.10
+
+- **The browser no longer grows with every photo:** the card reads a photo as bytes instead of with `Response.blob()`. Such a blob is kept by the browser's main process until the page collects its garbage, and a page that uses little script memory hardly ever does that, so the main process grew by every photo shown. On an Echo with TECHO5 the dashboard server's Chrome main process grew by about 90 MB an hour; measured in Chromium with every process on its own: before, the main process grew steadily (+16 MB every 30 s at one photo a second); now every process stays flat. Bytes count against the page's own memory, so the browser cleans them up by itself.
+
 ## 1.0.9
 
 - **Nothing piles up in the browser cache:** photos are sent with `Cache-Control: no-store` and the card fetches them without caching. Every photo link is used only once, but the browser kept each one for an hour. A screen that runs all day wrote every photo into its cache (reproduced: about 100 MB a minute at 10 photos a second, flat with no-store); on an Echo with TECHO5 the dashboard server's memory grew by about 140 MB an hour.
