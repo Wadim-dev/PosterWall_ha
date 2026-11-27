@@ -4,7 +4,7 @@
    Robust on weak devices and streamed screens: one photo is loaded at a time (one in stock), every step has a time limit,
    a watchdog restarts a stalled wall, photos are decoded at most 720 px wide. */
 (() => {
-  const VERSION = "1.0.10";
+  const VERSION = "1.0.11";
   const T = {
     en: {
       loading: "Loading photos …", none: "No photos found in this folder or album.", pick: "Choose a wall in the card settings.",
@@ -30,6 +30,7 @@
   const SIZE = { small: [0.22, 0.27], medium: [0.29, 0.36], large: [0.36, 0.44] };
   const EFFECTS = ["drop", "fade", "blow", "flip"];
   const MIN_TICK = 5;   // seconds: fading in (1.6 s) and leaving (0.9 s) need some room
+  const STATIC = "/posterwall_static"; // where Home Assistant serves the card and its worker
   const WIDTH = 720;    // pixels: photos are kept at most this wide (the wall never shows them bigger)
   const RATIOS = ["16:9", "16:10", "4:3", "3:2", "21:9", "1:1", "9:16"];
   const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
@@ -271,6 +272,35 @@
       this._stock.splice(0).forEach((f) => free(f.c));
       if (!this._started) this._begin(); else this._pump();
     }
+    // fetch and decode one photo in a worker that is ended right after: the photo's Blob lives and dies
+    // with it (a Blob made on the page stays in Chrome's main process until the page collects garbage)
+    async _decode(url) {
+      let w;
+      if (!this._noWorker) {
+        try { w = new Worker(`${STATIC}/posterwall-worker.js?v=${VERSION}`); }
+        catch (e) { this._noWorker = true; }
+      }
+      if (!w) return this._decodeHere(url); // workers not allowed here: on the page
+      let r;
+      try {
+        r = await limit(new Promise((ok) => {
+          w.onmessage = (e) => ok(e.data);
+          w.onerror = (e) => { if (e.preventDefault) e.preventDefault(); ok({ broken: true }); };
+          w.postMessage({ url: new URL(url, location.href).href, width: WIDTH });
+        }), 20000);
+      } finally { w.terminate(); }
+      if (r && r.broken) { this._noWorker = true; return this._decodeHere(url); } // the worker could not run
+      if (!r || r.error || !r.bmp) throw new Error((r && r.error) || "no photo");
+      return r.bmp;
+    }
+    async _decodeHere(url) {
+      const ab = new AbortController(), t = setTimeout(() => ab.abort(), 20000);
+      let blob;
+      try { const a = await fetch(url, { signal: ab.signal, cache: "no-store" }); if (!a.ok) throw new Error(a.status); blob = await a.blob(); }
+      finally { clearTimeout(t); }
+      try { return await limit(createImageBitmap(blob, { resizeWidth: WIDTH, resizeQuality: "medium" }), 20000); }
+      catch (e) { return limit(createImageBitmap(blob), 20000); }
+    }
     async _nextPhoto() {
       // ask the integration for the next photo, fetch and shrink it; every step has a time limit
       for (let tries = 0; tries < 4; tries++) {
@@ -280,18 +310,7 @@
         const ph = r.photos && r.photos[0]; if (!ph) return null;
         if (this._stack.some((o) => o._id === ph.id) && r.total > this._stack.length + 1) continue;
         try {
-          const ab = new AbortController(), t = setTimeout(() => ab.abort(), 20000);
-          let blob;
-          // read as bytes, not with Response.blob(): such a blob is held by the browser process until the page
-          // collects garbage, which a page with little script memory hardly does - Chrome's main process then
-          // grows by every photo (reproduced: +80 MB in 30 s, flat this way)
-          try { const a = await fetch(ph.url, { signal: ab.signal, cache: "no-store" }); if (!a.ok) throw new Error(a.status); blob = new Blob([await a.arrayBuffer()], { type: a.headers.get("content-type") || "image/jpeg" }); }
-          finally { clearTimeout(t); }
-          // phone photos (12 MP) are shrunk while decoding: happens beside the page, no jank, little memory
-          let bmp;
-          try { bmp = await limit(createImageBitmap(blob, { resizeWidth: WIDTH, resizeQuality: "medium" }), 20000); }
-          catch (e) { bmp = await limit(createImageBitmap(blob), 20000); }
-          blob = null;
+          const bmp = await this._decode(ph.url);
           const f = Math.min(1, WIDTH / bmp.width), c = document.createElement("canvas");
           c.width = Math.round(bmp.width * f); c.height = Math.round(bmp.height * f);
           c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
