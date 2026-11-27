@@ -4,7 +4,7 @@
    Robust on weak devices and streamed screens: one photo is loaded at a time (one in stock), every step has a time limit,
    a watchdog restarts a stalled wall, photos are decoded at most 720 px wide. */
 (() => {
-  const VERSION = "1.0.8";
+  const VERSION = "1.0.9";
   const T = {
     en: {
       loading: "Loading photos …", none: "No photos found in this folder or album.", pick: "Choose a wall in the card settings.",
@@ -282,7 +282,7 @@
         try {
           const ab = new AbortController(), t = setTimeout(() => ab.abort(), 20000);
           let blob;
-          try { const a = await fetch(ph.url, { signal: ab.signal }); if (!a.ok) throw new Error(a.status); blob = await a.blob(); }
+          try { const a = await fetch(ph.url, { signal: ab.signal, cache: "no-store" }); if (!a.ok) throw new Error(a.status); blob = await a.blob(); }
           finally { clearTimeout(t); }
           // phone photos (12 MP) are shrunk while decoding: happens beside the page, no jank, little memory
           let bmp;

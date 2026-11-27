@@ -153,6 +153,7 @@ async def test_photos_go_out_display_sized(hass: HomeAssistant, loaded: MockConf
     http = await hass_client_no_auth()
     resp = await http.get(async_sign_path(hass, f"/api/posterwall/{loaded.entry_id}/photo/{_key(pid)}", timedelta(minutes=1)))
     assert resp.status == 200 and resp.headers["Content-Type"] == "image/jpeg"
+    assert resp.headers["Cache-Control"] == "no-store"  # nothing piles up in a browser cache
     body = await resp.read()
     assert len(body) < 100_000
     with Image.open(io.BytesIO(body)) as small:

@@ -36,4 +36,5 @@ class PhotoView(HomeAssistantView):
             _LOGGER.debug("Photo %s could not be fetched: %s", photo_id, err)
             return web.Response(status=HTTPStatus.BAD_GATEWAY)
         return web.Response(body=body, content_type=content_type.split(";")[0],
-                            headers={"Cache-Control": "private, max-age=3600"})
+                            # every link is used once: a browser cache would only pile photos up (disk and memory)
+                            headers={"Cache-Control": "no-store"})

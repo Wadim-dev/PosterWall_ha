@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.9
+
+- **Nothing piles up in the browser cache:** photos are sent with `Cache-Control: no-store` and the card fetches them without caching. Every photo link is used only once, but the browser kept each one for an hour. A screen that runs all day wrote every photo into its cache (reproduced: about 100 MB a minute at 10 photos a second, flat with no-store); on an Echo with TECHO5 the dashboard server's memory grew by about 140 MB an hour.
+
 ## 1.0.8
 
 - **Photos leave Home Assistant display-sized:** every photo is shrunk to the size the card draws (at most 720 pixels wide, JPEG) before it goes to a screen – also photos from Home Assistant media folders, which went out as the full file before. A phone photo is now about 50–100 KB instead of several MB: less network, less decoding, and a long-running browser no longer piles up memory. On an Echo with TECHO5 the full files made the dashboard server's memory grow by about 30 MB a minute until its pages were stopped (reproduced: big photos +45 MB a minute, shrunk photos flat). Photos are turned upright by their EXIF orientation; transparent images get a white ground; at most two photos are shrunk at once.
