@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.11
+
+- **Fixes the memory growth for good:** each photo is now fetched and decoded in a small worker that the card ends right after the photo. Chrome keeps every Blob in its main process until the page that made it collects its garbage, and a quiet display page hardly ever does that. 1.0.10 only made this rarer, so on an Echo with TECHO5 the dashboard server still grew by about 145 MB an hour. Ending the worker frees its Blob at once, every time.
+  - Counted in Chrome's own blob list after 61 photos: 1.0.9 held 61, 1.0.10 held 29, 1.0.11 holds none.
+  - 10 minutes at one photo a second: the main process and the page stayed flat.
+  - Loading the photo as an image or with `ImageDecoder` was tried and dropped, because the page then grew by about 350 MB.
+- If a browser does not allow the worker, the card loads photos on the page as before.
+
 ## 1.0.10
 
 - **The browser no longer grows with every photo:** the card reads a photo as bytes instead of with `Response.blob()`. Such a blob is kept by the browser's main process until the page collects its garbage, and a page that uses little script memory hardly ever does that, so the main process grew by every photo shown. On an Echo with TECHO5 the dashboard server's Chrome main process grew by about 90 MB an hour; measured in Chromium with every process on its own: before, the main process grew steadily (+16 MB every 30 s at one photo a second); now every process stays flat. Bytes count against the page's own memory, so the browser cleans them up by itself.
